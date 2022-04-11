@@ -120,7 +120,7 @@
    :bdy bdy
    :bd bd})
 
-; motor neuron functions
+; motor neuron functions,  change by Aryan
 
 ; helper
 (defn move-by [ind delta-x delta-y]
