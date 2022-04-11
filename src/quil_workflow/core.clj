@@ -231,7 +231,7 @@
   (q/smooth)
   (q/frame-rate 30)
   (q/background 255)
-  {:population (vec (repeatedly 500 #(new-individual 8 {:x 800 :y 600})))})
+  {:population (vec (repeatedly 500 #(new-individual 20 {:x 800 :y 600})))})
 
 (defn update-state [state]
     {:population (:population state)})
@@ -257,3 +257,28 @@
     :renderer :p3d
     :features [:keep-on-top]
     :middleware [m/fun-mode m/pause-on-error]))
+
+
+
+; First: sigmoid function
+(defn sig [x]
+  (/ 1 (+ 1 (Math/exp (- (* x 5))))))
+;; Equivalent to 1/(1 + e^-x)
+;; (sig 5)    => 0.999999999986112
+
+
+; Second: tangent hyperbolic function
+(defn tanh [x]
+  (- (* 2 (sig (* 2 x))) 1))
+;; Equivalent to (2 * sig * 2 x) - 1
+;; (tanh 5)    =>  1.0
+;; (tanh -5)   => -1.0
+;; (tanh 0)    =>  0.0
+
+
+;; sigmoid function: placed as the last layer of a machine learning model
+;; can serve to convert the model's output into a probability score
+;; Also give values between "0 & 1"
+
+;; tanh function: ensures that the values stay between "-1 & 1",
+;; thus regulating the output of the neural network
