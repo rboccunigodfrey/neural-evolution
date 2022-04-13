@@ -33,6 +33,17 @@
 
 ; Setup code
 
+
+; First: sigmoid function
+(defn sig [x]
+  (/ 1 (+ 1 (Math/exp (- (* x 5))))))
+
+
+; Second: tangent hyperbolic function
+(defn tanh [x]
+  (- (* 2 (sig (* 2 x))) 1))
+
+
 ; dealing with hex genomes
 
 (defn rand-hex
@@ -114,12 +125,6 @@
 
 ; coll
 
-(def sensory-neuron-functions
-  {:age age
-   :bdx bdx
-   :bdy bdy
-   :bd bd})
-
 ; motor neuron functions,  change by Aryan
 
 ; helper
@@ -145,6 +150,12 @@
 (defn move-down [ind pop]
   (move-by ind 0 1))
 
+(def sensory-neuron-functions
+  {:age age
+   :bdx bdx
+   :bdy bdy
+   :bd bd})
+
 ; coll
 (def motor-neuron-functions
   {:mrnd move-rand
@@ -155,35 +166,51 @@
    })
 
 (def internal-neurons
-  {:int1 0.5
-   :int2 1
-   :int3 2
-   :int4 -0.5
-   :int5 -1
-   :int6 -2})
+  {:int1 0.1
+   :int2 0.2
+   :int3 0.3
+   :int4 0.4
+   :int5 0.5
+   :int6 0.6
+   :int7 0.7
+   :int8 0.8
+   :int9 0.9
+   :int10 1.0
+   })
 
-(defn gen-synapse-map [ind]
-  (let [genome (:genome ind)
-        bin-maps (map #(bin-map-32 (hex-to-bin %)) genome)]
-    (map #(hash-map
-            :source-neuron
-            (if
-              (= 0 (:source-type %))
-              (nth (keys sensory-neuron-functions)
-                   (mod (:source-id %) (count sensory-neuron-functions)))
-              (nth (keys internal-neurons)
-                  (mod (:sink-id %) (count internal-neurons))))
-            :sink-neuron
-            (if
-              (= 0 (:sink-type %))
-              (nth (keys motor-neuron-functions)
-                   (mod (:sink-id %) (count motor-neuron-functions)))
-              (nth (keys internal-neurons)
-                   (mod (:sink-id %) (count internal-neurons))))
-            :weight (double (/ (:weight %) 8000)))
-         bin-maps)))
 
-(defn filter-invalid-synapses [n-map]
+(defn gen-synapse-map [gene]
+  (let [bin-map (bin-map-32 (hex-to-bin gene))]
+    (hash-map
+      :source-neuron
+      (if
+        (= 0 (:source-type bin-map))
+        (nth (keys sensory-neuron-functions)
+             (mod (:source-id bin-map) (count sensory-neuron-functions)))
+        (nth (keys internal-neurons)
+             (mod (:source-id bin-map) (count internal-neurons))))
+      :sink-neuron
+      (if
+        (= 0 (:sink-type bin-map))
+        (nth (keys motor-neuron-functions)
+             (mod (:sink-id bin-map) (count motor-neuron-functions)))
+        (nth (keys internal-neurons)
+             (mod (:sink-id bin-map) (count internal-neurons))))
+      :weight (double (/ (:weight bin-map) 8000)))))
+
+#_(defn gen-genome [size]
+  (loop [count 0
+         gen-remain size]
+    (if )))
+
+(defn gen-synapse-vec [ind]
+  (let [genome (:genome ind)]
+    (map gen-synapse-map
+         genome)))
+
+
+
+#_(defn filter-invalid-synapses [n-map]
   (mapv first (vals (group-by
                      #(vector (first (vals %)) (last (vals %)))
                      (filter #(not (= (:source-neuron %) (:sink-neuron %))) n-map)))))
@@ -203,27 +230,19 @@
    {:sink-neuron :int5, :weight 3.65875, :source-neuron :age}
    {:sink-neuron :mrnd, :weight -0.85775, :source-neuron :bdy}])
 
+(defn get-source-values [ind pop]
+  (let [source-neurons (map #(get % :source-neuron) (gen-synapse-vec ind))]
+    (map #(hash-map % (if
+                        (contains? sensory-neuron-functions %)
+                        ((get % sensory-neuron-functions) ind pop)
+                        (get % internal-neurons)))
+         (distinct source-neurons))))
 
-(defn apply-neural-map [ind pop]
-  (let [ind-syn-map (filter-invalid-synapses (gen-synapse-map ind))]))
-
-
-(defn group-syn-vec [syn-vec]
-  (filter #(and (contains? sensory-neuron-functions (:source-neuron %))
-                (contains? motor-neuron-functions (:sink-neuron %)))
-          syn-vec))
-
-(defn gen-neural-map [ind]
-  (let [syn-vec (group-syn-vec (filter-invalid-synapses (gen-synapse-map ind)))
-        sensory-functions (distinct (map #(:source-neuron %) syn-vec))
-        motor-functions (distinct (map #(:sink-neuron %) syn-vec))]
-    sensory-functions
-    ))
-
-(defn new-individual [genome-size screen-size]
+(defn new-individual [genome-size]
   {:genome (map str (repeatedly genome-size #(rand-hex 8)))
    :neural-map '()
-   :position {:x (rand-int (:x screen-size)) :y (rand-int (:y screen-size))}})
+   :position {:x (rand-int 800) :y (rand-int 600)}
+   :age 0})
 
 ; Quil code
 
@@ -231,10 +250,19 @@
   (q/smooth)
   (q/frame-rate 30)
   (q/background 255)
-  {:population (vec (repeatedly 500 #(new-individual 20 {:x 800 :y 600})))})
+  {:population (vec (repeatedly 500 #(new-individual 20)))
+   :gen-age 0})
+
+(defn update-ind [ind]
+  (update ind :age (inc age)))
 
 (defn update-state [state]
-    {:population (:population state)})
+  (if
+    (> 300 (:gen-age state))
+    (hash-map :population (map update-ind (:population state))
+              :gen-age (inc (:gen-age state)))
+    (hash-map :population (vec (repeatedly 500 #(new-individual 20)))
+              :gen-age 0)))
 
 (defn draw-ind [position]
   (let [size 5]
@@ -259,21 +287,6 @@
     :middleware [m/fun-mode m/pause-on-error]))
 
 
-
-; First: sigmoid function
-(defn sig [x]
-  (/ 1 (+ 1 (Math/exp (- (* x 5))))))
-;; Equivalent to 1/(1 + e^-x)
-;; (sig 5)    => 0.999999999986112
-
-
-; Second: tangent hyperbolic function
-(defn tanh [x]
-  (- (* 2 (sig (* 2 x))) 1))
-;; Equivalent to (2 * sig * 2 x) - 1
-;; (tanh 5)    =>  1.0
-;; (tanh -5)   => -1.0
-;; (tanh 0)    =>  0.0
 
 
 ;; sigmoid function: placed as the last layer of a machine learning model
