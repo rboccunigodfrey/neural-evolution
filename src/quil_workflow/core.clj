@@ -43,6 +43,11 @@
 (defn tanh [x]
   (- (* 2 (sig (* 2 x))) 1))
 
+(defn in?
+  "true if coll contains elm"
+  [coll elm]
+  (some #(= elm %) coll))
+
 
 ; dealing with hex genomes
 
@@ -56,22 +61,22 @@
   "Converts hex string to binary string."
   [hex]
   (str/replace hex #"0|1|2|3|4|5|6|7|8|9|a|b|c|d|e|f"
-             {"0" "0000"
-              "1" "0001"
-              "2" "0010"
-              "3" "0011"
-              "4" "0100"
-              "5" "0101"
-              "6" "0110"
-              "7" "0111"
-              "8" "1000"
-              "9" "1001"
-              "a" "1010"
-              "b" "1011"
-              "c" "1100"
-              "d" "1101"
-              "e" "1110"
-              "f" "1111"}))
+               {"0" "0000"
+                "1" "0001"
+                "2" "0010"
+                "3" "0011"
+                "4" "0100"
+                "5" "0101"
+                "6" "0110"
+                "7" "0111"
+                "8" "1000"
+                "9" "1001"
+                "a" "1010"
+                "b" "1011"
+                "c" "1100"
+                "d" "1101"
+                "e" "1110"
+                "f" "1111"}))
 
 (defn mutate-hex
   "Swaps a random character in a hex string. There's probably a better way I can do this."
@@ -81,8 +86,8 @@
         hex-size (count hex)
         split-loc (rand-int hex-size)]
     (apply str
-            (flatten
-              [(take split-loc hex)
+           (flatten
+             [(take split-loc hex)
               (rand-nth replacements)
               (take-last (- hex-size split-loc) hex)]))))
 
@@ -99,7 +104,7 @@
      :sink-type (str-seq-to-int (take-drop-str 1 8))
      :sink-id (str-seq-to-int (take-drop-str 7 9)) ; unsigned conversion
      :weight (int (* (if (= "0" (first weight)) 1 -1)
-                        (str-seq-to-int (rest weight))))})) ; signed conversion (signed-magnitude
+                     (str-seq-to-int (rest weight))))})) ; signed conversion (signed-magnitude
 
 ; Generating neural network
 
@@ -197,25 +202,90 @@
 
 (defn gen-synapse-vec [ind]
   (let [genome (:genome ind)]
-    (map gen-synapse-map
-         genome)))
+    (mapv gen-synapse-map
+          genome)))
+
+
+(def example-syn-vec [{:sink-neuron :int5, :weight -1.98425, :source-neuron :bd}
+                      {:sink-neuron :int10, :weight 2.3115, :source-neuron :int5}
+                      {:sink-neuron :int2, :weight 2.122625, :source-neuron :int10}
+                      {:sink-neuron :ml, :weight 0.56625, :source-neuron :int2}
+                      {:sink-neuron :int2, :weight 0.725, :source-neuron :int1}
+                      {:sink-neuron :int7, :weight 0.8656, :source-neuron :int2}
+                      {:sink-neuron :mu, :weight 0.9345, :source-neuron :int7}])
 
 (defn get-source-values [ind pop]
-  (let [syn-vec (gen-synapse-vec ind)
-        mot-syn-vec (filter #() syn-vec)
+  (let [syn-vec example-syn-vec
         source-neurons (distinct (map #(get % :source-neuron) syn-vec))
         sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
-        source-values (map #(hash-map % (if
-                                          (contains? sensory-neuron-functions %)
-                                          ((get sensory-neuron-functions %) ind pop)
-                                          (get internal-neurons %)))
-                           source-neurons)]
-    (map #(loop [motor-input-val nil]
-            (if
-              (contains? sink-neurons (:source-neuron %))
-              )) syn-vec)
+        int-sink-neurons (filter #(contains? internal-neurons %) sink-neurons)
+        int-sink-syn-vec (filter #(contains? internal-neurons
+                                             (:sink-neuron %)) syn-vec)
+        mot-sink-syn-vec (filter #(contains? motor-neuron-functions
+                                             (:sink-neuron %)) syn-vec)
+        source-values (apply merge (map #(hash-map % (if
+                                                       (contains? sensory-neuron-functions %)
+                                                       ((get sensory-neuron-functions %) ind pop)
+                                                       (get internal-neurons %)))
+                                        source-neurons))]
 
-    (map #(hash-map) syn-vec)))
+    (mapv (fn [mot-syn]
+            (let [iter-syn
+                  (fn iter-syn [motor-input-tree
+                       cur-syn]
+                    (if
+                      (in? int-sink-neurons (:source-neuron cur-syn))
+                      (mapv #(iter-syn
+                               (conj motor-input-tree
+                                     (vector ((:source-neuron cur-syn) source-values)
+                                             (:weight cur-syn))
+                                     #_(hash-map :int-neuron (:source-neuron cur-syn)
+                                               :weight (:weight cur-syn)))
+                               %)
+                            (filter #(= (:sink-neuron %)
+                                        (:source-neuron cur-syn))
+                                    int-sink-syn-vec))
+                      (conj motor-input-tree
+                            (vector
+                              ((:source-neuron cur-syn) source-values)
+                              (:weight cur-syn))
+                            #_(hash-map :source-neuron
+                                      (:source-neuron cur-syn)
+                                      :weight
+                                      (:weight cur-syn)))))]
+            (hash-map :motor-neuron (:sink-neuron mot-syn)
+                      :input-tree
+                      (iter-syn [] mot-syn))))
+          mot-sink-syn-vec)
+
+    #_(mapv (fn [mot-syn]
+              (loop [motor-input-tree []
+                     cur-syn mot-syn]
+                (if
+                  (in? int-sink-neurons (:source-neuron cur-syn))
+                  (recur
+                    (conj motor-input-tree
+                          (hash-map :int-neuron-val ((:source-neuron cur-syn) source-values)
+                                    :weight (:weight cur-syn))
+                          #_(vector ((:source-neuron cur-syn) source-values)
+                                    (:weight cur-syn)))
+                    (first (filter #(= (:sink-neuron %)
+                                       (:source-neuron cur-syn))
+                                   int-sink-syn-vec)))
+                  (hash-map :motor-neuron (:sink-neuron mot-syn)
+                            :input-tree
+                            (conj motor-input-tree
+                                  (vector
+                                    (hash-map :source-neuron-val
+                                              ((:source-neuron cur-syn) source-values)
+                                              :weight
+                                              (:weight cur-syn))))
+                            #_(conj motor-input-tree
+                                    (vector
+                                      ((:source-neuron cur-syn) source-values)
+                                      (:weight cur-syn)))))))
+            mot-sink-syn-vec)))
+
 
 (defn new-individual [genome-size]
   {:genome (map str (repeatedly genome-size #(rand-hex 8)))
