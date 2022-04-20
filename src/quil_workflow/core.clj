@@ -34,12 +34,12 @@
 ; Setup code
 
 
-; First: sigmoid function
+; sigmoid function
 (defn sig [x]
   (/ 1 (+ 1 (Math/exp (- (* x 5))))))
 
 
-; Second: tangent hyperbolic function
+; tangent hyperbolic function
 (defn tanh [x]
   (- (* 2 (sig (* 2 x))) 1))
 
@@ -109,13 +109,13 @@
   (:age ind))
 
 (defn bdx [ind pop]
-  (let [x (:x (:position ind))
+  (let [x (first (:position ind))
         dist-left (Math/abs (- x 0))
         dist-right (Math/abs (- x 800))]
     (min dist-left dist-right)))
 
 (defn bdy [ind pop]
-  (let [y (:y (:position ind))
+  (let [y (second (:position ind))
         dist-top (Math/abs (- y 0))
         dist-bottom (Math/abs (- y 600))]
     (min dist-top dist-bottom)))
@@ -125,21 +125,18 @@
 
 ; coll
 
-; motor neuron functions,  change by Aryan
+; motor neuron functions
 
 ; helper
 (defn move-by [ind delta-x delta-y]
   (let [pos-vec (:position ind)
         new-x (+ (:x pos-vec) delta-x)
         new-y (+ (:x pos-vec) delta-y)]
-    (update ind :position replace [new-x new-y])))
+    (assoc ind :position [new-x new-y])))
 
 (defn move-rand [ind pop]
   (let [rand-move (rand-nth [-1 1])]
     (move-by ind rand-move rand-move)))
-
-(defn move-towards-nearest [ind pop]
-  )
 
 (defn move-right [ind pop]
   (move-by ind 1 0))
@@ -198,60 +195,46 @@
              (mod (:sink-id bin-map) (count internal-neurons))))
       :weight (double (/ (:weight bin-map) 8000)))))
 
-#_(defn gen-genome [size]
-  (loop [count 0
-         gen-remain size]
-    (if )))
-
 (defn gen-synapse-vec [ind]
   (let [genome (:genome ind)]
     (map gen-synapse-map
          genome)))
 
-
-
-#_(defn filter-invalid-synapses [n-map]
-  (mapv first (vals (group-by
-                     #(vector (first (vals %)) (last (vals %)))
-                     (filter #(not (= (:source-neuron %) (:sink-neuron %))) n-map)))))
-
-
-(def example-syn-vec
-  [{:sink-neuron :ml, :weight 1.062375, :source-neuron :int6}
-   {:sink-neuron :mu, :weight 3.623125, :source-neuron :age}
-   {:sink-neuron :ml, :weight -1.940375, :source-neuron :int3}
-   {:sink-neuron :int6, :weight 1.12975, :source-neuron :bdx}
-   {:sink-neuron :mu, :weight -1.1455, :source-neuron :bd}
-   {:sink-neuron :int1, :weight -2.353625, :source-neuron :bdy}
-   {:sink-neuron :md, :weight -1.22175, :source-neuron :int6}
-   {:sink-neuron :md, :weight -1.4525, :source-neuron :bdy}
-   {:sink-neuron :mr, :weight 3.641875, :source-neuron :bdx}
-   {:sink-neuron :mu, :weight 1.219125, :source-neuron :bdx}
-   {:sink-neuron :int5, :weight 3.65875, :source-neuron :age}
-   {:sink-neuron :mrnd, :weight -0.85775, :source-neuron :bdy}])
-
 (defn get-source-values [ind pop]
-  (let [source-neurons (map #(get % :source-neuron) (gen-synapse-vec ind))]
-    (map #(hash-map % (if
-                        (contains? sensory-neuron-functions %)
-                        ((get % sensory-neuron-functions) ind pop)
-                        (get % internal-neurons)))
-         (distinct source-neurons))))
+  (let [syn-vec (gen-synapse-vec ind)
+        mot-syn-vec (filter #() syn-vec)
+        source-neurons (distinct (map #(get % :source-neuron) syn-vec))
+        sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
+        source-values (map #(hash-map % (if
+                                          (contains? sensory-neuron-functions %)
+                                          ((get sensory-neuron-functions %) ind pop)
+                                          (get internal-neurons %)))
+                           source-neurons)]
+    (map #(loop [motor-input-val nil]
+            (if
+              (contains? sink-neurons (:source-neuron %))
+              )) syn-vec)
+
+    (map #(hash-map) syn-vec)))
 
 (defn new-individual [genome-size]
   {:genome (map str (repeatedly genome-size #(rand-hex 8)))
    :neural-map '()
-   :position {:x (rand-int 800) :y (rand-int 600)}
+   :position [(rand-int 800) (rand-int 600)]
    :age 0})
 
 ; Quil code
+
+(atom {:population (vec (repeatedly 500 #(new-individual 20)))
+       :gen-age 0})
 
 (defn setup []
   (q/smooth)
   (q/frame-rate 30)
   (q/background 255)
   {:population (vec (repeatedly 500 #(new-individual 20)))
-   :gen-age 0})
+   :gen-age 0
+   :gen-size 500})
 
 (defn update-ind [ind]
   (update ind :age (inc age)))
@@ -259,10 +242,12 @@
 (defn update-state [state]
   (if
     (> 300 (:gen-age state))
-    (hash-map :population (map update-ind (:population state))
-              :gen-age (inc (:gen-age state)))
-    (hash-map :population (vec (repeatedly 500 #(new-individual 20)))
-              :gen-age 0)))
+    (assoc state
+      :population (map update-ind (:population state))
+      :gen-age (inc (:gen-age state)))
+    (assoc state
+      :population (vec (repeatedly (:gen-size state) #(new-individual 20)))
+      :gen-age 0)))
 
 (defn draw-ind [position]
   (let [size 5]
@@ -277,7 +262,7 @@
 
 (defn create-sketch []
   (q/sketch
-    :title "Quil Example"
+    :title "Neural Evolution"
     :size [800 600]
     :setup #'setup
     :update #'update-state
