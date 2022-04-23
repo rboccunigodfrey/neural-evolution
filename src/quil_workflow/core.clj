@@ -118,23 +118,36 @@
 
 ; sensory neuron functions
 
-(defn age [ind pop]
+(defn distance [i1 i2]
+  (let [x1 (first (:position i1))
+        x2 (first (:position i2))
+        y1 (second (:position i1))
+        y2 (second (:position i2))]
+    (Math/sqrt (+ (* (- x2 x1)
+                     (- x2 x1))
+                  (* (- y2 y1)
+                     (- y2 y1))))))
+
+(defn age [ind population]
   (:age ind))
 
-(defn bdx [ind pop]
+(defn bdx [ind population]
   (let [x (first (:position ind))
         dist-left (Math/abs (- x 0))
         dist-right (Math/abs (- x 800))]
     (min dist-left dist-right)))
 
-(defn bdy [ind pop]
+(defn bdy [ind population]
   (let [y (second (:position ind))
         dist-top (Math/abs (- y 0))
         dist-bottom (Math/abs (- y 600))]
     (min dist-top dist-bottom)))
 
-(defn bd [ind pop]
-  (min (bdx ind pop) (bdy ind pop)))
+(defn bd [ind population]
+  (min (bdx ind population) (bdy ind population)))
+
+(defn nnd [ind population]
+  (first (sort (map #(distance ind %) population))))
 
 ; coll
 
@@ -147,18 +160,18 @@
         new-y (+ (second pos-vec) delta-y)]
     (assoc ind :position [new-x new-y])))
 
-(defn move-rand [ind pop]
-  (let [rand-move (rand-nth [-1 1])]
+(defn move-rand [ind population]
+  (let [rand-move (rand-nth [-5 0 5])]
     (move-by ind rand-move rand-move)))
 
-(defn move-right [ind pop]
-  (move-by ind 1 0))
-(defn move-left [ind pop]
-  (move-by ind -1 0))
-(defn move-up [ind pop]
-  (move-by ind 0 -1))
-(defn move-down [ind pop]
-  (move-by ind 0 1))
+(defn move-right [ind population]
+  (move-by ind 5 0))
+(defn move-left [ind population]
+  (move-by ind -5 0))
+(defn move-up [ind population]
+  (move-by ind 0 -5))
+(defn move-down [ind population]
+  (move-by ind 0 5))
 
 (def sensory-neuron-functions
   {:age age
@@ -175,18 +188,21 @@
    :md move-down
    })
 
-(def internal-neurons
-  {:int1 0.1
-   :int2 0.2
-   :int3 0.3
-   :int4 0.4
-   :int5 0.5
-   :int6 0.6
-   :int7 0.7
-   :int8 0.8
-   :int9 0.9
+(def internal-neurons-all
+  {:int1 -1.0
+   :int2 -0.8
+   :int3 -0.6
+   :int4 -0.4
+   :int5 -0.2
+   :int6 0.2
+   :int7 0.4
+   :int8 0.6
+   :int9 0.8
    :int10 1.0
    })
+
+(def internal-neurons
+  (select-keys internal-neurons-all (take 2 (shuffle (keys internal-neurons-all)))))
 
 
 (defn gen-synapse-map [gene]
@@ -208,10 +224,15 @@
              (mod (:sink-id bin-map) (count internal-neurons))))
       :weight (double (/ (:weight bin-map) 8000)))))
 
-(defn gen-synapse-vec [genome]
-  (mapv gen-synapse-map
-        genome))
+(defn filter-dup-synapses [syn-vec]
+  (mapv first (vals (group-by
+                      #(vector (first (vals %)) (last (vals %)))
+                      (filter #(not (= (:source-neuron %) (:sink-neuron %))) syn-vec)))))
 
+(defn gen-synapse-vec [genome]
+  (filter-dup-synapses
+    (mapv gen-synapse-map
+          genome)))
 
 (def example-syn-vec [{:sink-neuron :int5, :weight -1.98425, :source-neuron :bd}
                       {:sink-neuron :int10, :weight 2.3115, :source-neuron :int5}
@@ -221,15 +242,8 @@
                       {:sink-neuron :int7, :weight 0.8656, :source-neuron :int2}
                       {:sink-neuron :mu, :weight 0.9345, :source-neuron :int7}])
 
-
-(defn filter-dup-synapses [syn-map]
-  (mapv first (vals (group-by
-                      #(vector (first (vals %)) (last (vals %)))
-                      (filter #(not (= (:source-neuron %) (:sink-neuron %))) syn-map)))))
-
-
 (defn get-weighted-paths
-  [ind pop]
+  [ind population]
   (let [syn-vec (:neural-map ind)
         source-neurons (distinct (map #(get % :source-neuron) syn-vec))
         sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
@@ -240,10 +254,9 @@
                                              (:sink-neuron %)) syn-vec)
         source-values (apply merge (map #(hash-map % (if
                                                        (contains? sensory-neuron-functions %)
-                                                       ((get sensory-neuron-functions %) ind pop)
+                                                       ((get sensory-neuron-functions %) ind population)
                                                        (get internal-neurons %)))
                                         source-neurons))]
-
     (apply merge-with concat
            (mapv (fn [mot-syn]
                    (letfn [(populate-values
@@ -270,15 +283,15 @@
                        (recur-syn [] mot-syn 0))))
                  mot-sink-syn-vec))))
 
-(defn calc-motor-output [ind pop]
+(defn calc-motor-output [ind population]
   (let [mot-val-map
-        (into {} (for [[k v] (get-weighted-paths ind pop)]
-          [k (tanh (apply
-                     * (map (fn [syn-seq]
-                              (reduce #(tanh (apply * %1 %2))
-                                      (tanh (apply * (first (partition 2 syn-seq))))
-                                      (rest (partition 2 syn-seq))))
-                            (flatten-btm-lvl (vector v)))))]))]
+        (into {} (for [[k v] (get-weighted-paths ind population)]
+                   [k (tanh (apply
+                              * (map (fn [syn-seq]
+                                       (reduce #(tanh (apply * %1 %2))
+                                               (tanh (apply * (first (partition 2 syn-seq))))
+                                               (rest (partition 2 syn-seq))))
+                                     (flatten-btm-lvl (vector v)))))]))]
     (if (empty? mot-val-map)
       []
       (apply max-key val mot-val-map))))
@@ -287,32 +300,95 @@
 (defn new-individual [genome-size]
   (let [genome (map str (repeatedly genome-size #(rand-hex 8)))]
     {:genome genome
-     :neural-map (filter-dup-synapses (gen-synapse-vec genome))
-     :position [(rand-int 800) (rand-int 600)]
+     :neural-map (gen-synapse-vec genome)
+     :position [(rand-nth (range 0 800 5)) (rand-nth (range 0 600 5))]
      :age 0}))
+
+(defn select-left [population]
+  (let [filtered-pop (filterv #(< 400 (first (:position %))) population)]
+    filtered-pop))
+(defn select-right [population]
+  (let [filtered-pop (filterv #(> 400 (first (:position %))) population)]
+    filtered-pop))
+
+(defn repl-mutate [ind]
+  (let [new-genome (mapv #(if (< 0.01 (rand))
+                            (mutate-hex %)
+                            %) (:genome ind))]
+    (assoc ind :genome new-genome
+               :neural-map (gen-synapse-vec new-genome))))
+
+(defn make-child [ind]
+  {:genome (:genome ind)
+   :neural-map (:neural-map ind)
+   :position [(rand-nth (range 0 800 5)) (rand-nth (range 0 600 5))]
+   :age 0})
+
+
+(defn evolve-agents
+  [population-size max-gen genome-size tpg]
+  (let [init-pop (vec (repeatedly population-size #(new-individual genome-size)))]
+    (loop [ticks 0
+           generation 0
+           population init-pop]
+      (println (str "Generation: " generation ", Survivors: " (count (select-right population))))
+      (if (< generation max-gen)
+        (if (< ticks tpg)
+          (recur (inc ticks) generation
+                 (mapv #(let [motor-output (calc-motor-output % population)]
+                          (update (if (empty? motor-output)
+                                    %
+                                    (if (> (second motor-output) 0)
+                                      (((first motor-output) motor-neuron-functions) % population)
+                                      %))
+                                  :age inc))
+                      population))
+          (recur 0 (inc generation)
+                 (vec (repeatedly population-size #(repl-mutate
+                                    (make-child
+                                      (rand-nth
+                                        (select-right
+                                          population))))))))
+        (first population)))))
+
+
 
 ; Quil code
 
 (defn setup []
   (q/smooth)
-  (q/frame-rate 30)
+  (q/frame-rate 60)
   (q/background 255)
-  {:population (vec (repeatedly 500 #(new-individual 20)))
+  {:population (vec (repeatedly 500 #(new-individual 6)))
    :gen-age 0
-   :gen-size 500})
+   :gen-size 500
+   :generation 0
+   :prev-survivors 0})
 
-(defn update-ind [ind pop]
-  (let [motor-output (calc-motor-output ind pop)]
+(defn update-ind [ind population]
+  (let [motor-output (calc-motor-output ind population)]
     (update (if (empty? motor-output)
               ind
               (if (> (second motor-output) 0)
-                (((first motor-output) motor-neuron-functions) ind pop)
+                (((first motor-output) motor-neuron-functions) ind population)
                 ind))
             :age inc)))
 
 (defn update-state [state]
+  (if (< (:gen-age state) 100)
     (assoc state
-      :population (map #(update-ind % (:population state)) (:population state))))
+      :population (map #(update-ind % (:population state)) (:population state))
+      :gen-age (inc (:gen-age state)))
+    (assoc state
+      :population (repeatedly 500 #(repl-mutate
+                                     (make-child
+                                       (rand-nth
+                                         ((if (> (:gen-age state) 50) select-right select-left)
+                                           (:population state))))))
+      :gen-age 0
+      :generation (inc (:generation state))
+      :prev-survivors (count (select-right
+                               (:population state))))))
 
 (defn draw-ind [ind]
   (let [size 5
@@ -325,7 +401,10 @@
   (q/background 255)
   (q/no-stroke)
   (doseq [ind (:population state)]
-    (draw-ind ind)))
+    (draw-ind ind))
+  (q/text (str "Generation: " (:generation state)
+               "\nPrevious survivors: " (:prev-survivors state))
+          600 20))
 
 (defn create-sketch []
   (q/sketch
