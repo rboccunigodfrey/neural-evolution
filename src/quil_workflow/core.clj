@@ -48,6 +48,14 @@
   [coll elm]
   (some #(= elm %) coll))
 
+; flatten to bottom level
+(defn flatten-btm-lvl
+  [x]
+  (if (some #(coll? %) x)
+    (filterv #(and (sequential? %) (not-any? sequential? %))
+             (rest (tree-seq #(and (sequential? %) (some sequential? %)) seq x)))
+    x))
+
 
 ; dealing with hex genomes
 
@@ -79,7 +87,7 @@
                 "f" "1111"}))
 
 (defn mutate-hex
-  "Swaps a random character in a hex string. There's probably a better way I can do this."
+  "Swaps a random character in a hex string."
   [hex]
   (let [hex (str/split hex #"")
         replacements (str/split "0123456789abcdef" #"")
@@ -93,7 +101,7 @@
 
 (defn bin-map-32
   "Converts a 32 bit binary string into a map containing values
-  useful for neural net info. Probably could do this better too."
+  useful for neural net info."
   [bin-str]
   (let [bin (str/split bin-str #"")
         take-drop-str #(take %1 (drop %2 bin))
@@ -135,8 +143,8 @@
 ; helper
 (defn move-by [ind delta-x delta-y]
   (let [pos-vec (:position ind)
-        new-x (+ (:x pos-vec) delta-x)
-        new-y (+ (:x pos-vec) delta-y)]
+        new-x (+ (first pos-vec) delta-x)
+        new-y (+ (second pos-vec) delta-y)]
     (assoc ind :position [new-x new-y])))
 
 (defn move-rand [ind pop]
@@ -200,10 +208,9 @@
              (mod (:sink-id bin-map) (count internal-neurons))))
       :weight (double (/ (:weight bin-map) 8000)))))
 
-(defn gen-synapse-vec [ind]
-  (let [genome (:genome ind)]
-    (mapv gen-synapse-map
-          genome)))
+(defn gen-synapse-vec [genome]
+  (mapv gen-synapse-map
+        genome))
 
 
 (def example-syn-vec [{:sink-neuron :int5, :weight -1.98425, :source-neuron :bd}
@@ -214,8 +221,16 @@
                       {:sink-neuron :int7, :weight 0.8656, :source-neuron :int2}
                       {:sink-neuron :mu, :weight 0.9345, :source-neuron :int7}])
 
-(defn get-source-values [ind pop]
-  (let [syn-vec example-syn-vec
+
+(defn filter-dup-synapses [syn-map]
+  (mapv first (vals (group-by
+                      #(vector (first (vals %)) (last (vals %)))
+                      (filter #(not (= (:source-neuron %) (:sink-neuron %))) syn-map)))))
+
+
+(defn get-weighted-paths
+  [ind pop]
+  (let [syn-vec (:neural-map ind)
         source-neurons (distinct (map #(get % :source-neuron) syn-vec))
         sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
         int-sink-neurons (filter #(contains? internal-neurons %) sink-neurons)
@@ -229,74 +244,54 @@
                                                        (get internal-neurons %)))
                                         source-neurons))]
 
-    (mapv (fn [mot-syn]
-            (let [iter-syn
-                  (fn iter-syn [motor-input-tree
-                       cur-syn]
-                    (if
-                      (in? int-sink-neurons (:source-neuron cur-syn))
-                      (mapv #(iter-syn
-                               (conj motor-input-tree
-                                     (vector ((:source-neuron cur-syn) source-values)
-                                             (:weight cur-syn))
-                                     #_(hash-map :int-neuron (:source-neuron cur-syn)
-                                               :weight (:weight cur-syn)))
-                               %)
-                            (filter #(= (:sink-neuron %)
-                                        (:source-neuron cur-syn))
-                                    int-sink-syn-vec))
-                      (conj motor-input-tree
-                            (vector
-                              ((:source-neuron cur-syn) source-values)
-                              (:weight cur-syn))
-                            #_(hash-map :source-neuron
-                                      (:source-neuron cur-syn)
-                                      :weight
-                                      (:weight cur-syn)))))]
-            (hash-map :motor-neuron (:sink-neuron mot-syn)
-                      :input-tree
-                      (iter-syn [] mot-syn))))
-          mot-sink-syn-vec)
+    (apply merge-with concat
+           (mapv (fn [mot-syn]
+                   (letfn [(populate-values
+                             [motor-input-tree cur-syn]
+                             (conj motor-input-tree
+                                   (vector ((:source-neuron cur-syn) source-values)
+                                           (:weight cur-syn))))
+                           (recur-syn
+                             [motor-input-tree
+                              cur-syn
+                              recur-depth]
+                             (if
+                               (and (in? int-sink-neurons (:source-neuron cur-syn))
+                                    (< 300 recur-depth))
+                               (mapv #(recur-syn
+                                        (populate-values motor-input-tree cur-syn)
+                                        % (inc recur-depth))
+                                     (filter #(= (:sink-neuron %)
+                                                 (:source-neuron cur-syn))
+                                             int-sink-syn-vec))
+                               (reverse (populate-values motor-input-tree cur-syn))))]
+                     (hash-map
+                       (:sink-neuron mot-syn)
+                       (recur-syn [] mot-syn 0))))
+                 mot-sink-syn-vec))))
 
-    #_(mapv (fn [mot-syn]
-              (loop [motor-input-tree []
-                     cur-syn mot-syn]
-                (if
-                  (in? int-sink-neurons (:source-neuron cur-syn))
-                  (recur
-                    (conj motor-input-tree
-                          (hash-map :int-neuron-val ((:source-neuron cur-syn) source-values)
-                                    :weight (:weight cur-syn))
-                          #_(vector ((:source-neuron cur-syn) source-values)
-                                    (:weight cur-syn)))
-                    (first (filter #(= (:sink-neuron %)
-                                       (:source-neuron cur-syn))
-                                   int-sink-syn-vec)))
-                  (hash-map :motor-neuron (:sink-neuron mot-syn)
-                            :input-tree
-                            (conj motor-input-tree
-                                  (vector
-                                    (hash-map :source-neuron-val
-                                              ((:source-neuron cur-syn) source-values)
-                                              :weight
-                                              (:weight cur-syn))))
-                            #_(conj motor-input-tree
-                                    (vector
-                                      ((:source-neuron cur-syn) source-values)
-                                      (:weight cur-syn)))))))
-            mot-sink-syn-vec)))
+(defn calc-motor-output [ind pop]
+  (let [mot-val-map
+        (into {} (for [[k v] (get-weighted-paths ind pop)]
+          [k (tanh (apply
+                     * (map (fn [syn-seq]
+                              (reduce #(tanh (apply * %1 %2))
+                                      (tanh (apply * (first (partition 2 syn-seq))))
+                                      (rest (partition 2 syn-seq))))
+                            (flatten-btm-lvl (vector v)))))]))]
+    (if (empty? mot-val-map)
+      []
+      (apply max-key val mot-val-map))))
 
 
 (defn new-individual [genome-size]
-  {:genome (map str (repeatedly genome-size #(rand-hex 8)))
-   :neural-map '()
-   :position [(rand-int 800) (rand-int 600)]
-   :age 0})
+  (let [genome (map str (repeatedly genome-size #(rand-hex 8)))]
+    {:genome genome
+     :neural-map (filter-dup-synapses (gen-synapse-vec genome))
+     :position [(rand-int 800) (rand-int 600)]
+     :age 0}))
 
 ; Quil code
-
-(atom {:population (vec (repeatedly 500 #(new-individual 20)))
-       :gen-age 0})
 
 (defn setup []
   (q/smooth)
@@ -306,29 +301,31 @@
    :gen-age 0
    :gen-size 500})
 
-(defn update-ind [ind]
-  (update ind :age (inc age)))
+(defn update-ind [ind pop]
+  (let [motor-output (calc-motor-output ind pop)]
+    (update (if (empty? motor-output)
+              ind
+              (if (> (second motor-output) 0)
+                (((first motor-output) motor-neuron-functions) ind pop)
+                ind))
+            :age inc)))
 
 (defn update-state [state]
-  (if
-    (> 300 (:gen-age state))
     (assoc state
-      :population (map update-ind (:population state))
-      :gen-age (inc (:gen-age state)))
-    (assoc state
-      :population (vec (repeatedly (:gen-size state) #(new-individual 20)))
-      :gen-age 0)))
+      :population (map #(update-ind % (:population state)) (:population state))))
 
-(defn draw-ind [position]
-  (let [size 5]
+(defn draw-ind [ind]
+  (let [size 5
+        position (:position ind)
+        age (:age ind)]
     (q/fill 0)
-    (q/ellipse (:x position) (:y position) size size)))
+    (q/ellipse (first position) (second position) size size)))
 
 (defn draw-state [state]
   (q/background 255)
   (q/no-stroke)
   (doseq [ind (:population state)]
-    (draw-ind (:position ind))))
+    (draw-ind ind)))
 
 (defn create-sketch []
   (q/sketch
