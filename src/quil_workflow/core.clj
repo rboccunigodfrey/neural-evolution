@@ -1,4 +1,4 @@
-; Adaptation of David Randall Miller's evolutionary program by Rafael Boccuni-Godfrey
+; Adaptation of David Randall Miller's evolutionary program by Rafael Boccuni-Godfrey and Aryan Raval
 ; https://www.youtube.com/watch?v=N3tRFayqVtk
 
 (ns quil-workflow.core
@@ -149,6 +149,13 @@
 (defn nnd [ind population]
   (first (sort (map #(distance ind %) population))))
 
+(defn osc [ind population]
+  (let [min-val -4
+        max-val 4
+        avg-val (/ (+ min-val max-val) 2)
+        amp (/ (- max-val min-val) 2)]
+    (+ avg-val (* amp (Math/sin (* 0.1 (:age ind) Math/PI 2))))))
+
 ; coll
 
 ; motor neuron functions
@@ -177,7 +184,8 @@
   {:age age
    :bdx bdx
    :bdy bdy
-   :bd bd})
+   :bd bd
+   :osc osc})
 
 ; coll
 (def motor-neuron-functions
@@ -202,7 +210,7 @@
    })
 
 (def internal-neurons
-  (select-keys internal-neurons-all (take 2 (shuffle (keys internal-neurons-all)))))
+  (select-keys internal-neurons-all (take 6 (shuffle (keys internal-neurons-all)))))
 
 
 (defn gen-synapse-map [gene]
@@ -304,12 +312,17 @@
      :position [(rand-nth (range 0 800 5)) (rand-nth (range 0 600 5))]
      :age 0}))
 
+; selection methods
+
 (defn select-left [population]
   (let [filtered-pop (filterv #(< 400 (first (:position %))) population)]
     filtered-pop))
+
 (defn select-right [population]
   (let [filtered-pop (filterv #(> 400 (first (:position %))) population)]
     filtered-pop))
+
+; mutation
 
 (defn repl-mutate [ind]
   (let [new-genome (mapv #(if (< 0.01 (rand))
@@ -317,6 +330,8 @@
                             %) (:genome ind))]
     (assoc ind :genome new-genome
                :neural-map (gen-synapse-vec new-genome))))
+
+; offspring
 
 (defn make-child [ind]
   {:genome (:genome ind)
@@ -351,15 +366,13 @@
                                           population))))))))
         (first population)))))
 
-
-
 ; Quil code
 
 (defn setup []
   (q/smooth)
   (q/frame-rate 60)
   (q/background 255)
-  {:population (vec (repeatedly 500 #(new-individual 6)))
+  {:population (vec (repeatedly 500 #(new-individual 16)))
    :gen-age 0
    :gen-size 500
    :generation 0
@@ -383,8 +396,7 @@
       :population (repeatedly 500 #(repl-mutate
                                      (make-child
                                        (rand-nth
-                                         ((if (> (:gen-age state) 50) select-right select-left)
-                                           (:population state))))))
+                                         (select-right (:population state))))))
       :gen-age 0
       :generation (inc (:generation state))
       :prev-survivors (count (select-right
@@ -406,7 +418,7 @@
                "\nPrevious survivors: " (:prev-survivors state))
           600 20))
 
-(defn create-sketch []
+(defn animate-agents []
   (q/sketch
     :title "Neural Evolution"
     :size [800 600]
@@ -417,12 +429,9 @@
     :features [:keep-on-top]
     :middleware [m/fun-mode m/pause-on-error]))
 
+(defn -main [view]
+  (case view
+    :textual (evolve-agents 500 300 12 100)
+    :visual (defonce sketch (animate-agents))))
 
-
-
-;; sigmoid function: placed as the last layer of a machine learning model
-;; can serve to convert the model's output into a probability score
-;; Also give values between "0 & 1"
-
-;; tanh function: ensures that the values stay between "-1 & 1",
-;; thus regulating the output of the neural network
+(-main :textual)
