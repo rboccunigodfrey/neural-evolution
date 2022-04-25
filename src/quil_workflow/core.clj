@@ -113,7 +113,7 @@
      :sink-type (str-seq-to-int (take-drop-str 1 8))
      :sink-id (str-seq-to-int (take-drop-str 7 9)) ; unsigned conversion
      :weight (int (* (if (= "0" (first weight)) 1 -1)
-                     (str-seq-to-int (rest weight))))})) ; signed conversion (signed-magnitude
+                     (str-seq-to-int (rest weight))))})) ; signed conversion (signed-magnitude)
 
 ; Generating neural network
 
@@ -129,28 +129,28 @@
                   (* (- y2 y1)
                      (- y2 y1))))))
 
-(defn age [ind population]
+(defn age [ind _]
   (:age ind))
 
-(defn bdx [ind population]
+(defn bdx [ind _]
   (let [x (first (:position ind))
-        dist-left (Math/abs (- x 0))
-        dist-right (Math/abs (- x 800))]
+        dist-left (Math/abs ^int(- x 0))
+        dist-right (Math/abs ^int(- x 800))]
     (min dist-left dist-right)))
 
-(defn bdy [ind population]
+(defn bdy [ind _]
   (let [y (second (:position ind))
-        dist-top (Math/abs (- y 0))
-        dist-bottom (Math/abs (- y 600))]
+        dist-top (Math/abs ^int(- y 0))
+        dist-bottom (Math/abs ^int(- y 600))]
     (min dist-top dist-bottom)))
 
 (defn bd [ind population]
   (min (bdx ind population) (bdy ind population)))
 
-(defn nnd [ind population]
+#_(defn nnd [ind population]
   (first (sort (map #(distance ind %) population))))
 
-(defn osc [ind population]
+(defn osc [ind _]
   (let [min-val -4
         max-val 4
         avg-val (/ (+ min-val max-val) 2)
@@ -168,17 +168,17 @@
         new-y (+ (second pos-vec) delta-y)]
     (assoc ind :position [new-x new-y])))
 
-(defn move-rand [ind population]
+(defn move-rand [ind _]
   (let [rand-move (rand-nth [-5 0 5])]
     (move-by ind rand-move rand-move)))
 
-(defn move-right [ind population]
+(defn move-right [ind _]
   (move-by ind 5 0))
-(defn move-left [ind population]
+(defn move-left [ind _]
   (move-by ind -5 0))
-(defn move-up [ind population]
+(defn move-up [ind _]
   (move-by ind 0 -5))
-(defn move-down [ind population]
+(defn move-down [ind _]
   (move-by ind 0 5))
 
 (def sensory-neuron-functions
@@ -243,15 +243,15 @@
     (mapv gen-synapse-map
           genome)))
 
-(def example-syn-vec [{:sink-neuron :int5, :weight -1.98425, :source-neuron :bd}
-                      {:sink-neuron :int10, :weight 2.3115, :source-neuron :int5}
-                      {:sink-neuron :int2, :weight 2.122625, :source-neuron :int10}
-                      {:sink-neuron :ml, :weight 0.56625, :source-neuron :int2}
-                      {:sink-neuron :int2, :weight 0.725, :source-neuron :int1}
-                      {:sink-neuron :int7, :weight 0.8656, :source-neuron :int2}
-                      {:sink-neuron :mu, :weight 0.9345, :source-neuron :int7}])
+#_(def example-syn-vec [{:sink-neuron :int5, :weight -1.98425, :source-neuron :bd}
+                        {:sink-neuron :int10, :weight 2.3115, :source-neuron :int5}
+                        {:sink-neuron :int2, :weight 2.122625, :source-neuron :int10}
+                        {:sink-neuron :ml, :weight 0.56625, :source-neuron :int2}
+                        {:sink-neuron :int2, :weight 0.725, :source-neuron :int1}
+                        {:sink-neuron :int7, :weight 0.8656, :source-neuron :int2}
+                        {:sink-neuron :mu, :weight 0.9345, :source-neuron :int7}])
 
-(defn get-weighted-paths-v2 [ind population]
+#_(defn get-weighted-paths-v2 [ind population]
   (let [syn-vec (:neural-map ind)
         source-neurons (distinct (map #(get % :source-neuron) syn-vec))
         sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
@@ -275,7 +275,7 @@
                       [motor-input-tree cur-syn recur-depth]
                       (if (and (in? int-sink-neurons (:source-neuron cur-syn))
                                (< 300 recur-depth))
-                        (mapv)))]))
+                        (mapv #() )))]))
           mot-sink-syn-vec)))
 
 (defn get-weighted-paths
@@ -343,13 +343,18 @@
 
 ; selection methods
 
+(defn select-right [population]
+  (let [filtered-pop (filterv #(> 400 (first (:position %))) population)]
+    filtered-pop))
+
 (defn select-left [population]
   (let [filtered-pop (filterv #(< 400 (first (:position %))) population)]
     filtered-pop))
 
-(defn select-right [population]
-  (let [filtered-pop (filterv #(> 400 (first (:position %))) population)]
-    filtered-pop))
+(defn select-method [method]
+  (case method
+    :right select-right
+    :left select-left))
 
 ; mutation
 
@@ -360,6 +365,10 @@
     (assoc ind :genome new-genome
                :neural-map (gen-synapse-vec new-genome))))
 
+(defn mutation-method [method]
+  (case method
+    :replace repl-mutate))
+
 ; offspring
 
 (defn make-child [ind]
@@ -369,7 +378,7 @@
    :age 0})
 
 
-; collision code
+; TODO collision code
 
 ; object map creation
 (defn create-object [name vertices]
@@ -382,12 +391,12 @@
 
 
 (defn evolve-agents
-  [population-size max-gen genome-size tpg]
+  [population-size max-gen genome-size tpg s-method]
   (let [init-pop (vec (repeatedly population-size #(new-individual genome-size)))]
     (loop [ticks 0
            generation 0
            population init-pop]
-      (println (str "Generation: " generation ", Survivors: " (count (select-right population))))
+      (println (str "Generation: " generation ", Survivors: " (count ((select-method s-method) population))))
       (if (< generation max-gen)
         (if (< ticks tpg)
           (recur (inc ticks) generation
@@ -403,7 +412,7 @@
                  (vec (repeatedly population-size #(repl-mutate
                                     (make-child
                                       (rand-nth
-                                        (select-right
+                                        ((select-method s-method)
                                           population))))))))
         (first population)))))
 
@@ -415,9 +424,12 @@
   (q/background 255)
   {:population (vec (repeatedly 500 #(new-individual 16)))
    :gen-age 0
-   :gen-size 500
    :generation 0
-   :prev-survivors 0})
+   :prev-survivors 0
+   :gen-size 500
+   :tpg 100
+   :selection-method :right
+   :mutation-method :replace})
 
 (defn update-ind [ind population]
   (let [motor-output (calc-motor-output ind population)]
@@ -429,24 +441,23 @@
             :age inc)))
 
 (defn update-state [state]
-  (if (< (:gen-age state) 100)
+  (if (< (:gen-age state) (:tpg state))
     (assoc state
       :population (map #(update-ind % (:population state)) (:population state))
       :gen-age (inc (:gen-age state)))
     (assoc state
-      :population (repeatedly 500 #(repl-mutate
+      :population (repeatedly (:gen-size state) #((mutation-method (:mutation-method state))
                                      (make-child
                                        (rand-nth
-                                         (select-right (:population state))))))
+                                         ((select-method (:selection-method state)) (:population state))))))
       :gen-age 0
       :generation (inc (:generation state))
-      :prev-survivors (count (select-right
+      :prev-survivors (count ((select-method (:selection-method state))
                                (:population state))))))
 
 (defn draw-ind [ind]
   (let [size 5
-        position (:position ind)
-        age (:age ind)]
+        position (:position ind)]
     (q/fill 0)
     (q/ellipse (first position) (second position) size size)))
 
@@ -473,5 +484,5 @@
 
 (defn -main [view]
   (case view
-    :textual (evolve-agents 500 300 12 100)
+    :textual (evolve-agents 500 300 12 100 :right)
     :visual (defonce sketch (animate-agents))))
