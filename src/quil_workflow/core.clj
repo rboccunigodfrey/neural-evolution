@@ -197,7 +197,7 @@
    :md move-down
    })
 
-(def internal-neurons-all
+(def internal-neurons
   {:int1 -1.0
    :int2 -0.8
    :int3 -0.6
@@ -210,7 +210,7 @@
    :int10 1.0
    })
 
-(def internal-neurons
+#_(def internal-neurons
   (select-keys internal-neurons-all (take 6 (shuffle (keys internal-neurons-all)))))
 
 
@@ -253,7 +253,7 @@
 
 (defn get-weighted-paths
   [ind population]
-  (let [syn-vec example-syn-vec #_(:neural-map ind)
+  (let [syn-vec (:neural-map ind)
         source-neurons (distinct (map #(get % :source-neuron) syn-vec))
         sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
         int-sink-neurons (filter #(contains? internal-neurons %) sink-neurons)
@@ -266,11 +266,12 @@
                                                        ((get sensory-neuron-functions %) ind population)
                                                        (get internal-neurons %)))
                                         source-neurons))]
+    (println syn-vec)
     (apply merge-with concat
            (mapv (fn [mot-syn]
                    (letfn [(populate-values
                              [motor-input-tree cur-syn]
-                             (concat motor-input-tree
+                             (concat (vec motor-input-tree)
                                    (vector ((:source-neuron cur-syn) source-values)
                                            (:weight cur-syn))))
                            (recur-syn
@@ -286,10 +287,10 @@
                                      (filter #(= (:sink-neuron %)
                                                  (:source-neuron cur-syn))
                                              int-sink-syn-vec))
-                               (reverse (populate-values motor-input-tree cur-syn))))]
+                               (vec (populate-values motor-input-tree cur-syn))))]
                      (hash-map
                        (:sink-neuron mot-syn)
-                       (recur-syn [] mot-syn 0))))
+                       (vec (recur-syn [] mot-syn 0)))))
                  mot-sink-syn-vec))))
 
 (defn calc-motor-output [ind population]
