@@ -2,9 +2,10 @@
 ; https://www.youtube.com/watch?v=N3tRFayqVtk
 
 (ns quil-workflow.core
-  (:require [quil.core :as q]
-            [quil.middleware :as m]
-            [clojure.string :as str]))
+  (:require
+   [clojure.string :as str]
+   [quil.core :as q]
+   [quil.middleware :as m]))
 
 ; What we need: data
 ; - structure of an individual: {:genome ["hex string" "..."] :neural-map [...] :position: {:x x :y y} :angle n :age n}
@@ -252,7 +253,7 @@
 
 (defn get-weighted-paths
   [ind population]
-  (let [syn-vec (:neural-map ind)
+  (let [syn-vec example-syn-vec #_(:neural-map ind)
         source-neurons (distinct (map #(get % :source-neuron) syn-vec))
         sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
         int-sink-neurons (filter #(contains? internal-neurons %) sink-neurons)
@@ -269,7 +270,7 @@
            (mapv (fn [mot-syn]
                    (letfn [(populate-values
                              [motor-input-tree cur-syn]
-                             (conj motor-input-tree
+                             (concat motor-input-tree
                                    (vector ((:source-neuron cur-syn) source-values)
                                            (:weight cur-syn))))
                            (recur-syn
@@ -338,6 +339,18 @@
    :neural-map (:neural-map ind)
    :position [(rand-nth (range 0 800 5)) (rand-nth (range 0 600 5))]
    :age 0})
+
+
+; collision code
+
+; object map creation
+(defn create-object [name vertices]
+  {name vertices})
+
+(defn add-object [object obj-map]
+  (merge obj-map object))
+
+(def example-object (create-object :rect1 [[100 100] [300 200]]))
 
 
 (defn evolve-agents
@@ -429,9 +442,8 @@
     :features [:keep-on-top]
     :middleware [m/fun-mode m/pause-on-error]))
 
+
 (defn -main [view]
   (case view
     :textual (evolve-agents 500 300 12 100)
     :visual (defonce sketch (animate-agents))))
-
-(-main :textual)
