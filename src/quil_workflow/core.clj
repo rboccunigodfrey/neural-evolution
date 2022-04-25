@@ -251,6 +251,33 @@
                       {:sink-neuron :int7, :weight 0.8656, :source-neuron :int2}
                       {:sink-neuron :mu, :weight 0.9345, :source-neuron :int7}])
 
+(defn get-weighted-paths-v2 [ind population]
+  (let [syn-vec (:neural-map ind)
+        source-neurons (distinct (map #(get % :source-neuron) syn-vec))
+        sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
+        int-sink-neurons (filter #(contains? internal-neurons %) sink-neurons)
+        int-sink-syn-vec (filter #(contains? internal-neurons
+                                             (:sink-neuron %)) syn-vec)
+        mot-sink-syn-vec (filter #(contains? motor-neuron-functions
+                                             (:sink-neuron %)) syn-vec)
+        source-values (apply merge (map #(hash-map % (if
+                                                       (contains? sensory-neuron-functions %)
+                                                       ((get sensory-neuron-functions %) ind population)
+                                                       (get internal-neurons %)))
+                                        source-neurons))]
+    (mapv (fn [mot-syn]
+            (letfn [(populate-values
+                      [motor-input-tree cur-syn]
+                      (concat motor-input-tree
+                              (vector ((:source-neuron cur-syn) source-values)
+                                      (:weight cur-syn))))
+                    (recur-syn
+                      [motor-input-tree cur-syn recur-depth]
+                      (if (and (in? int-sink-neurons (:source-neuron cur-syn))
+                               (< 300 recur-depth))
+                        (mapv)))]))
+          mot-sink-syn-vec)))
+
 (defn get-weighted-paths
   [ind population]
   (let [syn-vec (:neural-map ind)
