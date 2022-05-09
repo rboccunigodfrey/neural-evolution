@@ -152,7 +152,14 @@
   (min (bdx ind population) (bdy ind population)))
 
 (defn nnd [ind population]
-  (second (sort (map #(distance ind %) population))))
+  (reduce
+    #(if (and (< %1 (distance ind %2))
+              (not (= (:id %2) (:id ind)))
+              (not (zero? %1)))
+       %1 (distance ind %2))
+    (distance ind (first population))
+    (rest population))
+  #_(second (sort (map #(distance ind %) population))))
 
 (defn osc [ind _]
   (let [min-val -4
@@ -191,7 +198,8 @@
    :bdx bdx
    :bdy bdy
    :bd  bd
-   :osc osc})
+   :osc osc
+   :nnd nnd})
 
 (def motor-neuron-functions
   {:mrnd move-rand
@@ -248,13 +256,13 @@
           genome)))
 
 #_(def example-syn-vec
-  [{:sink-neuron :int5, :weight -1.98425, :source-neuron :bd}
-   {:sink-neuron :int10, :weight 2.3115, :source-neuron :int5}
-   {:sink-neuron :int2, :weight 2.122625, :source-neuron :int10}
-   {:sink-neuron :ml, :weight 0.56625, :source-neuron :int2}
-   {:sink-neuron :int2, :weight 0.725, :source-neuron :int1}
-   {:sink-neuron :int7, :weight 0.8656, :source-neuron :int2}
-   {:sink-neuron :mu, :weight 0.9345, :source-neuron :int7}])
+    [{:sink-neuron :int5, :weight -1.98425, :source-neuron :bd}
+     {:sink-neuron :int10, :weight 2.3115, :source-neuron :int5}
+     {:sink-neuron :int2, :weight 2.122625, :source-neuron :int10}
+     {:sink-neuron :ml, :weight 0.56625, :source-neuron :int2}
+     {:sink-neuron :int2, :weight 0.725, :source-neuron :int1}
+     {:sink-neuron :int7, :weight 0.8656, :source-neuron :int2}
+     {:sink-neuron :mu, :weight 0.9345, :source-neuron :int7}])
 
 #_(defn neural-vals-v2 [ind population]
     (let [syn-vec (filter-dup-synapses (:neural-map ind))
@@ -571,8 +579,8 @@
      :generation       0
      :prev-survivors   0
      :gen-size         gen-size
-     :tpg              100
-     :selection-method :right-circle
+     :tpg              300
+     :selection-method :left
      :mutation-method  :replace
      :pheromones       []}))
 
@@ -675,3 +683,5 @@
   (case view
     :textual (evolve-agents 500 300 12 100 :right :replace)
     :visual (defonce sketch (animate-agents))))
+
+(-main :visual)
