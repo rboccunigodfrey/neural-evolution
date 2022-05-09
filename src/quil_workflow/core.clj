@@ -5,8 +5,7 @@
   (:require
     [clojure.string :as str]
     [quil.core :as q]
-    [quil.middleware :as m]
-    [clojure.walk :refer [postwalk]]))
+    [quil.middleware :as m]))
 
 ; What we need: data
 ; - structure of an individual: {:genome ["hex string" "..."] :neural-map [...] :position: {:x x :y y} :angle n :age n}
@@ -252,74 +251,74 @@
                         {:sink-neuron :int7, :weight 0.8656, :source-neuron :int2}
                         {:sink-neuron :mu, :weight 0.9345, :source-neuron :int7}])
 
-(defn neural-vals-v2 [ind population]
-  (let [syn-vec (filter-dup-synapses (:neural-map ind))
-        source-neurons (distinct (map #(get % :source-neuron) syn-vec))
-        sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
-        int-sink-neurons (filter #(contains? internal-neurons %) sink-neurons)
-        int-sink-syn-vec (filter #(contains? internal-neurons
-                                             (:sink-neuron %)) syn-vec)
-        mot-sink-syn-vec (filter #(contains? motor-neuron-functions
-                                             (:sink-neuron %)) syn-vec)
-        grouped-mot (group-by :sink-neuron mot-sink-syn-vec)
-        num-grouped-mot (frequencies (map :sink-neuron mot-sink-syn-vec))
-        get-parents (fn [child]
-                      (filterv #(= (:sink-neuron %)
-                                   (:source-neuron child))
-                               int-sink-syn-vec))
-        get-children (fn [parent]
-                       (filterv #(= (:source-neuron %)
-                                    (:sink-neuron parent))
-                                syn-vec))]
-    #_(prn syn-vec)
-    (prn (filterv #(empty? (get-parents %)) syn-vec))
-    (loop [cur-values (filter-dup-synapses (into [] (flatten (mapv get-children
-                                                                   (filterv #(empty? (get-parents %)) syn-vec)))))
-           recur-depth 0]
-      (let [children (filter-dup-synapses (flatten (mapv #(conj (get-children %) %) cur-values)))
-            child-mot-freq (frequencies (map :sink-neuron (filter #(contains? motor-neuron-functions
-                                                                              (:sink-neuron %)) children)))]
-        (prn num-grouped-mot)
-        (prn child-mot-freq)
-        (if (or (> recur-depth 300) (= num-grouped-mot child-mot-freq))
-          cur-values
-          (recur children (inc recur-depth))))
-      #_(recur (mapv #(conj (get-children %) %) cur-values) (inc recur-depth)))
-    #_(loop [cur-values
-             (mapv
-               #(hash-map
-                  :sink-neuron (:sink-neuron %)
-                  :value (tanh (* (if (contains? sensory-neuron-functions (:source-neuron %))
-                                    ((get sensory-neuron-functions (:source-neuron %)) ind population)
-                                    (get internal-neurons (:source-neuron %)))
-                                  (:weight %))))
-               (filter-dup-synapses
-                 (into [] (flatten (mapv get-children
-                                         (filterv #(empty? (get-parents %)) syn-vec))))))
+#_(defn neural-vals-v2 [ind population]
+    (let [syn-vec (filter-dup-synapses (:neural-map ind))
+          source-neurons (distinct (map #(get % :source-neuron) syn-vec))
+          sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
+          int-sink-neurons (filter #(contains? internal-neurons %) sink-neurons)
+          int-sink-syn-vec (filter #(contains? internal-neurons
+                                               (:sink-neuron %)) syn-vec)
+          mot-sink-syn-vec (filter #(contains? motor-neuron-functions
+                                               (:sink-neuron %)) syn-vec)
+          grouped-mot (group-by :sink-neuron mot-sink-syn-vec)
+          num-grouped-mot (frequencies (map :sink-neuron mot-sink-syn-vec))
+          get-parents (fn [child]
+                        (filterv #(= (:sink-neuron %)
+                                     (:source-neuron child))
+                                 int-sink-syn-vec))
+          get-children (fn [parent]
+                         (filterv #(= (:source-neuron %)
+                                      (:sink-neuron parent))
+                                  syn-vec))]
+      #_(prn syn-vec)
+      (prn (filterv #(empty? (get-parents %)) syn-vec))
+      (loop [cur-values (filter-dup-synapses (into [] (flatten (mapv get-children
+                                                                     (filterv #(empty? (get-parents %)) syn-vec)))))
              recur-depth 0]
-        (let [motor-values (filter #(contains? motor-neuron-functions (:sink-neuron %)) cur-values)]
-          (if (or (> recur-depth 300) (= (count motor-values) (count cur-values)))
+        (let [children (filter-dup-synapses (flatten (mapv #(conj (get-children %) %) cur-values)))
+              child-mot-freq (frequencies (map :sink-neuron (filter #(contains? motor-neuron-functions
+                                                                                (:sink-neuron %)) children)))]
+          (prn num-grouped-mot)
+          (prn child-mot-freq)
+          (if (or (> recur-depth 300) (= num-grouped-mot child-mot-freq))
             cur-values
-            (recur
-              (mapv
-                (fn [child]
-                  (if (contains? motor-neuron-functions (:sink-neuron child))
-                    (reduce
-                      #(tanh (* % (:value %2)))
-                      (:value child)
-                      (filter #(= (:sink-neuron child) (:sink-neuron %)) (flatten (mapv get-children syn-vec))))
-                    (hash-map
-                      :sink-neuron (:sink-neuron child)
-                      :value (tanh (* (:value child)
-                                      (get internal-neurons (:source-neuron child))
-                                      (:weight child)))
-                      :source-neuron (:source-neuron child))))
-                (filter-dup-synapses
-                  (into [] (flatten (mapv get-children cur-values)))))
-              (inc recur-depth)))))
-    #_(postwalk #(if (empty? (get-parents %)) % (get-parents %)) (get-parents mot-sink-syn-vec))
-    #_(loop [cur-val-map-vec [] recur-depth 0]
-        (recur (conj cur-val-map-vec (mapv get-children (filterv #(empty? (get-parents %)) syn-vec))) (inc recur-depth)))))
+            (recur children (inc recur-depth))))
+        #_(recur (mapv #(conj (get-children %) %) cur-values) (inc recur-depth)))
+      #_(loop [cur-values
+               (mapv
+                 #(hash-map
+                    :sink-neuron (:sink-neuron %)
+                    :value (tanh (* (if (contains? sensory-neuron-functions (:source-neuron %))
+                                      ((get sensory-neuron-functions (:source-neuron %)) ind population)
+                                      (get internal-neurons (:source-neuron %)))
+                                    (:weight %))))
+                 (filter-dup-synapses
+                   (into [] (flatten (mapv get-children
+                                           (filterv #(empty? (get-parents %)) syn-vec))))))
+               recur-depth 0]
+          (let [motor-values (filter #(contains? motor-neuron-functions (:sink-neuron %)) cur-values)]
+            (if (or (> recur-depth 300) (= (count motor-values) (count cur-values)))
+              cur-values
+              (recur
+                (mapv
+                  (fn [child]
+                    (if (contains? motor-neuron-functions (:sink-neuron child))
+                      (reduce
+                        #(tanh (* % (:value %2)))
+                        (:value child)
+                        (filter #(= (:sink-neuron child) (:sink-neuron %)) (flatten (mapv get-children syn-vec))))
+                      (hash-map
+                        :sink-neuron (:sink-neuron child)
+                        :value (tanh (* (:value child)
+                                        (get internal-neurons (:source-neuron child))
+                                        (:weight child)))
+                        :source-neuron (:source-neuron child))))
+                  (filter-dup-synapses
+                    (into [] (flatten (mapv get-children cur-values)))))
+                (inc recur-depth)))))
+      #_(postwalk #(if (empty? (get-parents %)) % (get-parents %)) (get-parents mot-sink-syn-vec))
+      #_(loop [cur-val-map-vec [] recur-depth 0]
+          (recur (conj cur-val-map-vec (mapv get-children (filterv #(empty? (get-parents %)) syn-vec))) (inc recur-depth)))))
 
 (defn get-weighted-paths
   [ind population]
@@ -375,13 +374,72 @@
       []
       (apply max-key val mot-val-map))))
 
+; ; ---------------- OBJECTS/REDZONES ---------------------
 
-(defn new-individual [genome-size]
-  (let [genome (map str (repeatedly genome-size #(rand-hex 8)))]
-    {:genome     genome
+(defn create-object [x y w h]
+  {:x x :y y :w w :h h})
+
+(defn create-rand-obj []
+  (create-object (rand-nth (range 10 700))
+                 (rand-nth (range 10 500))
+                 (rand-nth (range 10 60))
+                 (rand-nth (range 10 60))))
+
+(defn collided-obj? [ind obj]
+  (and (< (first (:position ind)) (+ (:x obj) (:w obj)))
+       (> (first (:position ind)) (:x obj))
+       (< (second (:position ind)) (+ (:y obj) (:h obj)))
+       (> (second (:position ind)) (:y obj))))
+
+(defn collided-ind? [i1 i2]
+  (and (not (= (:id i1) (:id i2)))
+       (= (:position i1) (:position i2))))
+
+(defn collided-any-obj? [ind objects]
+  (> (count (filter #(collided-obj? ind %) objects)) 0))
+
+(defn collided-any-ind? [ind population]
+  (> (count (filter #(collided-ind? ind %) population)) 0))
+
+(defn collided-borders? [ind]
+  (or (<= (first (:position ind)) 5) (>= (first (:position ind)) 795)
+      (<= (second (:position ind)) 5) (>= (second (:position ind)) 595)))
+
+(def example-object-vec
+  [{:x 300 :y 0 :w 20 :h 260}
+   {:x 300 :y 320 :w 20 :h 280}])
+
+(def red-zones
+  [{:x 0 :y 0 :w 800 :h 20}
+   #_{:x 0 :y 0 :w 20 :h 600}
+   #_{:x 780 :y 0 :w 20 :h 600}
+   {:x 0 :y 580 :w 800 :h 20}])
+
+; ---------------- EVOLUTION ---------------------
+
+; population generation
+
+(defn new-individual [genome-size id]
+  (let [genome (map str (repeatedly genome-size #(rand-hex 64)))]
+    {:id         id
+     :genome     genome
      :neural-map (gen-synapse-vec genome)
-     :position   [(rand-nth (range 0 800 5)) (rand-nth (range 0 600 5))]
-     :age        0}))
+     :position   [(rand-nth (range 5 800 5))
+                  (rand-nth (range 5 600 5))]
+     :age        0
+     :color      [(rand-int 170) (rand-int 170) (rand-int 170)]}))
+
+
+(defn gen-population [population-size genome-size objects]
+  (loop [population [] ind-success 0]
+    (if (= population-size ind-success)
+      population
+      (let [cand-ind (new-individual genome-size ind-success)]
+        (if (or (collided-any-ind? cand-ind population)
+                (collided-any-obj? cand-ind objects))
+          (recur population ind-success)
+          (recur (conj population cand-ind) (inc ind-success)))))))
+
 
 ; selection methods
 
@@ -390,13 +448,17 @@
     filtered-pop))
 
 (defn select-left [population]
-  (let [filtered-pop (filterv #(< (first (:position %)) 200) population)]
+  (let [filtered-pop (filterv #(< (first (:position %)) 100) population)]
     filtered-pop))
+
+(defn filter-redzones [population redzones]
+  (filterv #(not (collided-any-obj? % redzones)) population))
 
 (defn select-method [method]
   (case method
     :right select-right
     :left select-left))
+
 
 ; mutation
 
@@ -413,34 +475,35 @@
 
 ; offspring
 
-(defn make-child [ind]
-  {:genome     (:genome ind)
-   :neural-map (:neural-map ind)
-   :position   [(rand-nth (range 0 800 5)) (rand-nth (range 0 600 5))]
-   :age        0})
+(defn make-child [ind id]
+  (assoc ind :id id
+             :position [(rand-nth (range 5 800 5))
+                               (rand-nth (range 5 600 5))]
+             :age 0))
 
+(defn gen-children
+  "Generates children, applying selection and mutation"
+  [population objects redzones s-method m-method gen-size]
+  (loop [children [] child-success 0]
+    (if (= gen-size child-success)
+      children
+      (let [cand-child
+            ((mutation-method m-method)
+             (make-child
+               (rand-nth
+                 (filter-redzones
+                   ((select-method s-method)
+                    population) redzones)) child-success))]
+        (if (or (collided-any-ind? cand-child children)
+                (collided-any-obj? cand-child objects))
+          (recur children child-success)
+          (recur (conj children cand-child) (inc child-success)))))))
 
-; TODO collision code
-
-; object map creation
-(defn create-object [x y w h]
-  {:x x :y y :w w :h h})
-
-(defn create-rand-obj []
-  (create-object (rand-nth (range 10 700))
-                 (rand-nth (range 10 500))
-                 (rand-nth (range 10 60))
-                 (rand-nth (range 10 60))))
-
-(defn collided? [ind obj]
-  (and (< (first (:position ind)) (+ (:x obj) (:w obj)))
-       (> (+ (first (:position ind)) 5) (:x obj))
-       (< (second (:position ind)) (+ (:y obj) (:h obj)))
-       (> (+ (second (:position ind)) 5) (:y obj))))
+; main textual evo loop
 
 (defn evolve-agents
-  [population-size max-gen genome-size tpg s-method]
-  (let [init-pop (vec (repeatedly population-size #(new-individual genome-size)))]
+  [gen-size max-gen genome-size tpg s-method m-method]
+  (let [init-pop (gen-population gen-size genome-size example-object-vec)]
     (loop [ticks 0
            generation 0
            population init-pop]
@@ -448,37 +511,40 @@
       (if (< generation max-gen)
         (if (< ticks tpg)
           (recur (inc ticks) generation
-                 (mapv #(let [motor-output (calc-motor-output % population)]
-                          (update (if (empty? motor-output)
-                                    %
-                                    (if (> (second motor-output) 0)
-                                      (((first motor-output) motor-neuron-functions) % population)
-                                      %))
-                                  :age inc))
-                       population))
-          (recur 0 (inc generation)
-                 (vec (repeatedly population-size #(repl-mutate
-                                                     (make-child
-                                                       (rand-nth
-                                                         ((select-method s-method)
-                                                          population))))))))
+                 (mapv
+                   #(let [motor-output (calc-motor-output % population)]
+                      (update
+                        (if (empty? motor-output)
+                          %
+                          (if (> (second motor-output) 0)
+                            (((first motor-output) motor-neuron-functions) % population)
+                            %))
+                        :age inc))
+                   population))
+          (recur 0
+                 (inc generation)
+                 (gen-children population example-object-vec red-zones s-method m-method gen-size)))
         (first population)))))
 
-; Quil code
+; ---------------- QUIL ---------------------
 
 (defn setup []
   (q/smooth)
   (q/frame-rate 60)
   (q/background 255)
-  {:population       (vec (repeatedly 500 #(new-individual 16)))
-   :objects          (vec (repeatedly 4 create-rand-obj))
-   :gen-age          0
-   :generation       0
-   :prev-survivors   0
-   :gen-size         500
-   :tpg              100
-   :selection-method :right
-   :mutation-method  :replace})
+  (let [gen-size 500
+        objects (vec (concat example-object-vec (repeatedly 10 create-rand-obj)))]
+    {:population       (gen-population gen-size 16 objects)
+     :objects          objects
+     :redzones         red-zones
+     :gen-age          0
+     :generation       0
+     :prev-survivors   0
+     :gen-size         gen-size
+     :tpg              100
+     :selection-method :left
+     :mutation-method  :replace}))
+
 
 (defn update-ind [ind state]
   (let [population (:population state)
@@ -488,9 +554,12 @@
               ind
               (if (> (second motor-output) 0)
                 (let [moved-ind (((first motor-output) motor-neuron-functions) ind population)]
-                  (if (= 0 (count (filter #(collided? moved-ind %) objects)))
-                    (((first motor-output) motor-neuron-functions) ind population)
-                    ind))
+                  (if (collided-borders? ind)
+                    ind
+                    (if (or (collided-any-obj? moved-ind objects)
+                            (collided-any-ind? moved-ind population))
+                      ind
+                      moved-ind)))
                 ind))
             :age inc)))
 
@@ -500,34 +569,42 @@
       :population (map #(update-ind % state) (:population state))
       :gen-age (inc (:gen-age state)))
     (assoc state
-      :population (repeatedly (:gen-size state) #((mutation-method (:mutation-method state))
-                                                  (make-child
-                                                    (rand-nth
-                                                      ((select-method (:selection-method state)) (:population state))))))
+      :population
+      (gen-children (:population state)
+                    (:objects state)
+                    (:redzones state)
+                    (:selection-method state)
+                    (:mutation-method state)
+                    (:gen-size state))
       :gen-age 0
       :generation (inc (:generation state))
-      :prev-survivors (count ((select-method (:selection-method state))
-                              (:population state))))))
+      :prev-survivors (count (filter-redzones ((select-method (:selection-method state))
+                              (:population state)) (:redzones state))))))
 
 (defn draw-ind [ind]
   (let [size 5
         position (:position ind)]
-    (q/fill 0)
+    (q/fill (:color ind))
     (q/ellipse (first position) (second position) size size)))
 
 (defn draw-obj [obj]
   (q/fill 100)
   (q/rect (:x obj) (:y obj) (:w obj) (:h obj)))
 
-
+(defn draw-redzone [redzone]
+  (q/fill 255 0 0 50)
+  (q/rect (:x redzone) (:y redzone) (:w redzone) (:h redzone)))
 
 (defn draw-state [state]
   (q/background 255)
   (q/no-stroke)
-  (doseq [ind (:population state)]
-    (draw-ind ind))
+  (doseq [redzone (:redzones state)]
+    (draw-redzone redzone))
   (doseq [obj (:objects state)]
     (draw-obj obj))
+  (doseq [ind (:population state)]
+    (draw-ind ind))
+  (q/color 0)
   (q/text (str "Generation: " (:generation state)
                "\nPrevious survivors: " (:prev-survivors state))
           600 20))
@@ -546,5 +623,5 @@
 
 (defn -main [view]
   (case view
-    :textual (evolve-agents 500 300 12 100 :right)
+    :textual (evolve-agents 500 300 12 100 :right :replace)
     :visual (defonce sketch (animate-agents))))
