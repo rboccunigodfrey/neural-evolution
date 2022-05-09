@@ -119,15 +119,19 @@
 
 ; sensory neuron functions
 
+(defn distance-general [x1 x2 y1 y2]
+  (Math/sqrt (+ (* (- x2 x1)
+                   (- x2 x1))
+                (* (- y2 y1)
+                   (- y2 y1)))))
+
 (defn distance [i1 i2]
   (let [x1 (first (:position i1))
         x2 (first (:position i2))
         y1 (second (:position i1))
         y2 (second (:position i2))]
-    (Math/sqrt (+ (* (- x2 x1)
-                     (- x2 x1))
-                  (* (- y2 y1)
-                     (- y2 y1))))))
+    (distance-general x1 x2 y1 y2)))
+
 
 (defn age [ind _]
   (:age ind))
@@ -147,8 +151,8 @@
 (defn bd [ind population]
   (min (bdx ind population) (bdy ind population)))
 
-#_(defn nnd [ind population]
-    (first (sort (map #(distance ind %) population))))
+(defn nnd [ind population]
+  (second (sort (map #(distance ind %) population))))
 
 (defn osc [ind _]
   (let [min-val -4
@@ -156,8 +160,6 @@
         avg-val (/ (+ min-val max-val) 2)
         amp (/ (- max-val min-val) 2)]
     (+ avg-val (* amp (Math/sin (* 0.1 (:age ind) Math/PI 2))))))
-
-; coll
 
 ; motor neuron functions
 
@@ -181,6 +183,9 @@
 (defn move-down [ind _]
   (move-by ind 0 5))
 
+(defn release-pheromone [ind _]
+  (assoc ind :rp true))
+
 (def sensory-neuron-functions
   {:age age
    :bdx bdx
@@ -188,14 +193,13 @@
    :bd  bd
    :osc osc})
 
-; coll
 (def motor-neuron-functions
   {:mrnd move-rand
    :mr   move-right
    :ml   move-left
    :mu   move-up
    :md   move-down
-   })
+   :rlp  release-pheromone})
 
 (def internal-neurons
   {:int1  -1.0
@@ -243,13 +247,14 @@
     (mapv gen-synapse-map
           genome)))
 
-#_(def example-syn-vec [{:sink-neuron :int5, :weight -1.98425, :source-neuron :bd}
-                        {:sink-neuron :int10, :weight 2.3115, :source-neuron :int5}
-                        {:sink-neuron :int2, :weight 2.122625, :source-neuron :int10}
-                        {:sink-neuron :ml, :weight 0.56625, :source-neuron :int2}
-                        {:sink-neuron :int2, :weight 0.725, :source-neuron :int1}
-                        {:sink-neuron :int7, :weight 0.8656, :source-neuron :int2}
-                        {:sink-neuron :mu, :weight 0.9345, :source-neuron :int7}])
+#_(def example-syn-vec
+  [{:sink-neuron :int5, :weight -1.98425, :source-neuron :bd}
+   {:sink-neuron :int10, :weight 2.3115, :source-neuron :int5}
+   {:sink-neuron :int2, :weight 2.122625, :source-neuron :int10}
+   {:sink-neuron :ml, :weight 0.56625, :source-neuron :int2}
+   {:sink-neuron :int2, :weight 0.725, :source-neuron :int1}
+   {:sink-neuron :int7, :weight 0.8656, :source-neuron :int2}
+   {:sink-neuron :mu, :weight 0.9345, :source-neuron :int7}])
 
 #_(defn neural-vals-v2 [ind population]
     (let [syn-vec (filter-dup-synapses (:neural-map ind))
@@ -427,7 +432,8 @@
      :position   [(rand-nth (range 5 800 5))
                   (rand-nth (range 5 600 5))]
      :age        0
-     :color      [(rand-int 170) (rand-int 170) (rand-int 170)]}))
+     :color      [(rand-int 170) (rand-int 170) (rand-int 170)]
+     :pr         false}))
 
 
 (defn gen-population [population-size genome-size objects]
@@ -448,8 +454,26 @@
     filtered-pop))
 
 (defn select-left [population]
-  (let [filtered-pop (filterv #(< (first (:position %)) 100) population)]
+  (let [filtered-pop (filterv #(< (first (:position %)) 200) population)]
     filtered-pop))
+
+(defn select-circle [population x y]
+  (let [radius 100]
+    (filterv
+      #(< (distance-general
+            (first (:position %)) 400
+            (second (:position %)) 300)
+          radius)
+      population)))
+
+(defn select-central-circle [population]
+  (select-circle population 400 300))
+
+(defn select-left-circle [population]
+  (select-circle population 200 300))
+
+(defn select-right-circle [population]
+  (select-circle population 600 300))
 
 (defn filter-redzones [population redzones]
   (filterv #(not (collided-any-obj? % redzones)) population))
@@ -457,7 +481,10 @@
 (defn select-method [method]
   (case method
     :right select-right
-    :left select-left))
+    :left select-left
+    :central-circle select-central-circle
+    :right-circle select-right-circle
+    :left-circle select-left-circle))
 
 
 ; mutation
@@ -478,8 +505,10 @@
 (defn make-child [ind id]
   (assoc ind :id id
              :position [(rand-nth (range 5 800 5))
-                               (rand-nth (range 5 600 5))]
-             :age 0))
+                        (rand-nth (range 5 600 5))]
+             :age 0
+             :pr false
+             :color [(rand-int 170) (rand-int 170) (rand-int 170)]))
 
 (defn gen-children
   "Generates children, applying selection and mutation"
@@ -533,7 +562,8 @@
   (q/frame-rate 60)
   (q/background 255)
   (let [gen-size 500
-        objects (vec (concat example-object-vec (repeatedly 10 create-rand-obj)))]
+        objects (vec example-object-vec
+                     #_(concat example-object-vec (repeatedly 10 create-rand-obj)))]
     {:population       (gen-population gen-size 16 objects)
      :objects          objects
      :redzones         red-zones
@@ -542,9 +572,9 @@
      :prev-survivors   0
      :gen-size         gen-size
      :tpg              100
-     :selection-method :left
-     :mutation-method  :replace}))
-
+     :selection-method :right-circle
+     :mutation-method  :replace
+     :pheromones       []}))
 
 (defn update-ind [ind state]
   (let [population (:population state)
@@ -567,6 +597,9 @@
   (if (< (:gen-age state) (:tpg state))
     (assoc state
       :population (map #(update-ind % state) (:population state))
+      :pheromones (concat
+                    (mapv #(update % :strength - 0.5) (filter #(not (<= (:strength %) 0)) (:pheromones state)))
+                    (mapv #(hash-map :position (:position %) :strength 30) (filter #(:pr %) (:population state))))
       :gen-age (inc (:gen-age state)))
     (assoc state
       :population
@@ -579,7 +612,7 @@
       :gen-age 0
       :generation (inc (:generation state))
       :prev-survivors (count (filter-redzones ((select-method (:selection-method state))
-                              (:population state)) (:redzones state))))))
+                                               (:population state)) (:redzones state))))))
 
 (defn draw-ind [ind]
   (let [size 5
@@ -591,6 +624,15 @@
   (q/fill 100)
   (q/rect (:x obj) (:y obj) (:w obj) (:h obj)))
 
+(defn draw-pheromone [pheromone]
+  (let [size 3
+        position (:position pheromone)]
+    (q/fill 120 (:strength pheromone))
+    (doseq [i (range 10)]
+      (let [actual-size (+ size i)]
+        (q/fill (/ (:strength pheromone) i))
+        (q/ellipse (first position) (second position) actual-size actual-size)))))
+
 (defn draw-redzone [redzone]
   (q/fill 255 0 0 50)
   (q/rect (:x redzone) (:y redzone) (:w redzone) (:h redzone)))
@@ -598,21 +640,29 @@
 (defn draw-state [state]
   (q/background 255)
   (q/no-stroke)
+  (q/fill 225)
+  (q/rect 800 0 200 600)
+  (doseq [i (range 10)]
+    (q/fill 100 (- 10 i))
+    (q/rect 800 0 (- 10 i) 600))
   (doseq [redzone (:redzones state)]
     (draw-redzone redzone))
   (doseq [obj (:objects state)]
     (draw-obj obj))
+  (doseq [pheromone (:pheromones state)]
+    (draw-pheromone pheromone))
   (doseq [ind (:population state)]
     (draw-ind ind))
-  (q/color 0)
+  (q/fill 0)
   (q/text (str "Generation: " (:generation state)
-               "\nPrevious survivors: " (:prev-survivors state))
-          600 20))
+               "\nPrevious survivors: " (:prev-survivors state)
+               "\nPheromone count: " (count (:pheromones state)))
+          830 20))
 
 (defn animate-agents []
   (q/sketch
     :title "Neural Evolution"
-    :size [800 600]
+    :size [1000 600]
     :setup #'setup
     :update #'update-state
     :draw #'draw-state
