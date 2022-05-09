@@ -163,7 +163,7 @@
     (Math/sqrt (+ (* dx dx) (* dy dy)))))
 
 (defn nearest-object-dist [ind _ objects]
-  (reduce #(if (< (distance-obj ind %1) (distance-obj ind %2)) %1 %2) objects))
+  (distance-obj ind (reduce #(if (< (distance-obj ind %1) (distance-obj ind %2)) %1 %2) objects)))
 
 (defn nnd [ind population _]
   (reduce
@@ -205,7 +205,7 @@
   (move-by ind 0 5))
 
 (defn release-pheromone [ind _]
-  (assoc ind :rp true))
+  (assoc ind :pr true))
 
 (def sensory-neuron-functions
   {:age age
@@ -389,7 +389,6 @@
                  mot-sink-syn-vec))))
 
 (defn calc-motor-output [ind population objects]
-  (prn (get-weighted-paths ind population objects))
   (let [mot-val-map
         (into {} (for [[k v] (get-weighted-paths ind population objects)]
                    [k (tanh (apply
@@ -452,7 +451,7 @@
     {:id         id
      :genome     genome
      :neural-map (gen-synapse-vec genome)
-     :position   [(rand-nth (range 5 800 5))
+     :position   [(rand-nth (range 500 800 5))
                   (rand-nth (range 5 600 5))]
      :age        0
      :color      [(rand-int 170) (rand-int 170) (rand-int 170)]
@@ -527,7 +526,7 @@
 
 (defn make-child [ind id]
   (assoc ind :id id
-             :position [(rand-nth (range 5 800 5))
+             :position [(rand-nth (range 500 800 5))
                         (rand-nth (range 5 600 5))]
              :age 0
              :pr false
@@ -603,7 +602,7 @@
   (let [population (:population state)
         objects (:objects state)
         motor-output (calc-motor-output ind population objects)]
-    (update (if (empty? motor-output)
+    (assoc (if (empty? motor-output)
               ind
               (if (> (second motor-output) 0)
                 (let [moved-ind (((first motor-output) motor-neuron-functions) ind population)]
@@ -614,14 +613,14 @@
                       ind
                       moved-ind)))
                 ind))
-            :age inc)))
+            :age (inc (:age ind)))))
 
 (defn update-state [state]
   (if (< (:gen-age state) (:tpg state))
     (assoc state
       :population (map #(update-ind % state) (:population state))
       :pheromones (concat
-                    (mapv #(update % :strength - 0.5) (filter #(not (<= (:strength %) 0)) (:pheromones state)))
+                    (mapv #(update % :strength - 2) (filter #(not (<= (:strength %) 0)) (:pheromones state)))
                     (mapv #(hash-map :position (:position %) :strength 30) (filter #(:pr %) (:population state))))
       :gen-age (inc (:gen-age state)))
     (assoc state
@@ -648,12 +647,13 @@
   (q/rect (:x obj) (:y obj) (:w obj) (:h obj)))
 
 (defn draw-pheromone [pheromone]
-  (let [size 3
+  (let [size 5
         position (:position pheromone)]
-    (q/fill 120 (:strength pheromone))
-    (doseq [i (range 10)]
+    (q/fill 0 (:strength pheromone))
+    (q/ellipse (first position) (second position) size size)
+    #_(doseq [i (range 10)]
       (let [actual-size (+ size i)]
-        (q/fill (/ (:strength pheromone) i))
+        (q/fill 100 (/ (:strength pheromone) (inc i)))
         (q/ellipse (first position) (second position) actual-size actual-size)))))
 
 (defn draw-redzone [redzone]
