@@ -133,25 +133,39 @@
     (distance-general x1 x2 y1 y2)))
 
 
-(defn age [ind _]
+(defn age [ind _ _]
   (:age ind))
 
-(defn bdx [ind _]
+(defn bdx [ind _ _]
   (let [x (first (:position ind))
         dist-left (Math/abs ^int (- x 0))
         dist-right (Math/abs ^int (- x 800))]
     (min dist-left dist-right)))
 
-(defn bdy [ind _]
+(defn bdy [ind _ _]
   (let [y (second (:position ind))
         dist-top (Math/abs ^int (- y 0))
         dist-bottom (Math/abs ^int (- y 600))]
     (min dist-top dist-bottom)))
 
-(defn bd [ind population]
-  (min (bdx ind population) (bdy ind population)))
+(defn bd [ind population objects]
+  (min (bdx ind population objects) (bdy ind population objects)))
 
-(defn nnd [ind population]
+(defn distance-obj [ind obj]
+  (let [rect-min-x (:x obj)
+        rect-min-y (:y obj)
+        rect-max-x (+ (:x obj) (:w obj))
+        rect-max-y (+ (:y obj) (:h obj))
+        ind-x (first (:position ind))
+        ind-y (second (:position ind))
+        dx (Math/max (- rect-min-x ind-x) (Math/max 0 (- ind-x rect-max-x)))
+        dy (Math/max (- rect-min-y ind-y) (Math/max 0 (- ind-y rect-max-y)))]
+    (Math/sqrt (+ (* dx dx) (* dy dy)))))
+
+(defn nearest-object-dist [ind _ objects]
+  (reduce #(if (< (distance-obj ind %1) (distance-obj ind %2)) %1 %2) objects))
+
+(defn nnd [ind population _]
   (reduce
     #(if (and (< %1 (distance ind %2))
               (not (= (:id %2) (:id ind)))
@@ -161,7 +175,7 @@
     (rest population))
   #_(second (sort (map #(distance ind %) population))))
 
-(defn osc [ind _]
+(defn osc [ind _ _]
   (let [min-val -4
         max-val 4
         avg-val (/ (+ min-val max-val) 2)
@@ -199,7 +213,7 @@
    :bdy bdy
    :bd  bd
    :osc osc
-   :nnd nnd})
+   :nod nearest-object-dist})
 
 (def motor-neuron-functions
   {:mrnd move-rand
@@ -334,7 +348,7 @@
           (recur (conj cur-val-map-vec (mapv get-children (filterv #(empty? (get-parents %)) syn-vec))) (inc recur-depth)))))
 
 (defn get-weighted-paths
-  [ind population]
+  [ind population objects]
   (let [syn-vec (:neural-map ind)
         source-neurons (distinct (map #(get % :source-neuron) syn-vec))
         sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
@@ -345,7 +359,7 @@
                                              (:sink-neuron %)) syn-vec)
         source-values (apply merge (map #(hash-map % (if
                                                        (contains? sensory-neuron-functions %)
-                                                       ((get sensory-neuron-functions %) ind population)
+                                                       ((get sensory-neuron-functions %) ind population objects)
                                                        (get internal-neurons %)))
                                         source-neurons))]
     (apply merge-with concat
@@ -374,9 +388,10 @@
                        (vec (recur-syn [] mot-syn 0)))))
                  mot-sink-syn-vec))))
 
-(defn calc-motor-output [ind population]
+(defn calc-motor-output [ind population objects]
+  (prn (get-weighted-paths ind population objects))
   (let [mot-val-map
-        (into {} (for [[k v] (get-weighted-paths ind population)]
+        (into {} (for [[k v] (get-weighted-paths ind population objects)]
                    [k (tanh (apply
                               * (map (fn [syn-seq]
                                        (reduce #(tanh (apply * %1 %2))
@@ -469,8 +484,8 @@
   (let [radius 100]
     (filterv
       #(< (distance-general
-            (first (:position %)) 400
-            (second (:position %)) 300)
+            (first (:position %)) x
+            (second (:position %)) y)
           radius)
       population)))
 
@@ -549,7 +564,7 @@
         (if (< ticks tpg)
           (recur (inc ticks) generation
                  (mapv
-                   #(let [motor-output (calc-motor-output % population)]
+                   #(let [motor-output (calc-motor-output % population [])]
                       (update
                         (if (empty? motor-output)
                           %
@@ -587,7 +602,7 @@
 (defn update-ind [ind state]
   (let [population (:population state)
         objects (:objects state)
-        motor-output (calc-motor-output ind population)]
+        motor-output (calc-motor-output ind population objects)]
     (update (if (empty? motor-output)
               ind
               (if (> (second motor-output) 0)
