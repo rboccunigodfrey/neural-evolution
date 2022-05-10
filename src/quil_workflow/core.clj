@@ -246,10 +246,13 @@
 
 (def sensory-neuron-functions
   {:age  age
+   :bdx  bdx
+   :bdy  bdy
+   :bd   bd
    :oscs osc-sin
    :oscc osc-cos
    :nod  nearest-object-dist
-   #_:pdr #_pdr
+   :pdr pdr
    :dfc  dist-from-center})
 
 (def motor-neuron-functions
@@ -262,7 +265,7 @@
    :mul  (fn [ind _] (move-angle ind 5))
    :mu   (fn [ind _] (move-angle ind 6))
    :mur  (fn [ind _] (move-angle ind 7))
-   #_:rlp  #_release-pheromone})
+   :rlp  release-pheromone})
 
 (def internal-neurons
   {:int1  -1.0
@@ -773,3 +776,5 @@
   (case view
     :textual (evolve-agents 500 300 12 100 :right :replace)
     :visual (defonce sketch (animate-agents))))
+
+(-main :visual)
