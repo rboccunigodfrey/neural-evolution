@@ -133,23 +133,26 @@
     (distance-general x1 x2 y1 y2)))
 
 
-(defn age [ind _ _]
+(defn age [ind _ _ _]
   (:age ind))
 
-(defn bdx [ind _ _]
+(defn bdx [ind _ _ _]
   (let [x (first (:position ind))
         dist-left (Math/abs ^int (- x 0))
         dist-right (Math/abs ^int (- x 800))]
     (min dist-left dist-right)))
 
-(defn bdy [ind _ _]
+(defn bdy [ind _ _ _]
   (let [y (second (:position ind))
         dist-top (Math/abs ^int (- y 0))
         dist-bottom (Math/abs ^int (- y 600))]
     (min dist-top dist-bottom)))
 
-(defn bd [ind population objects]
-  (min (bdx ind population objects) (bdy ind population objects)))
+(defn bd [ind population objects pheromones]
+  (min (bdx ind population objects pheromones) (bdy ind population objects pheromones)))
+
+(defn dist-from-center [ind _ _ _]
+  (distance-general (first (:position ind)) (second (:position ind)) 400 300))
 
 (defn distance-obj [ind obj]
   (let [rect-min-x (:x obj)
@@ -162,10 +165,10 @@
         dy (Math/max (- rect-min-y ind-y) (Math/max 0 (- ind-y rect-max-y)))]
     (Math/sqrt (+ (* dx dx) (* dy dy)))))
 
-(defn nearest-object-dist [ind _ objects]
+(defn nearest-object-dist [ind _ objects _]
   (distance-obj ind (reduce #(if (< (distance-obj ind %1) (distance-obj ind %2)) %1 %2) objects)))
 
-(defn nnd [ind population _]
+(defn nnd [ind population _ _]
   (reduce
     #(if (and (< %1 (distance ind %2))
               (not (= (:id %2) (:id ind)))
@@ -175,53 +178,87 @@
     (rest population))
   #_(second (sort (map #(distance ind %) population))))
 
-(defn osc [ind _ _]
+(defn osc [ind method]
   (let [min-val -4
         max-val 4
         avg-val (/ (+ min-val max-val) 2)
         amp (/ (- max-val min-val) 2)]
-    (+ avg-val (* amp (Math/sin (* 0.1 (:age ind) Math/PI 2))))))
+    (+ avg-val (* amp (method (* 0.1 (:age ind) Math/PI 2))))))
+
+(defn osc-sin [ind _ _ _]
+  (osc ind #(Math/sin %)))
+
+(defn osc-cos [ind _ _ _]
+  (osc ind #(Math/cos %)))
+
+
+(defn pdr [ind _ _ pheromones]
+  (let [ind-x (first (:position ind))
+        ind-y (second (:position ind))
+        dist-ph #(distance-general
+                    ind-x
+                    (first (:position %))
+                    ind-y
+                    (second (:position %)))
+        near-ph (filter #(and (not (= (:id %) (:id ind)))
+                              (< (- (dist-ph %)) 30))
+                        pheromones)]
+    (if (zero? (count near-ph))
+      0
+      (* 10 (reduce #(+ %1 (* (:strength %2) (/ 1 (+ 1 (dist-ph %2)))))
+              (* (:strength (first near-ph))
+                 (/ 1 (+ 1 (dist-ph (first near-ph)))))
+              (rest near-ph))))))
+
+(defn dir-to-slope [dir]
+  )
+
+(defn position-on-path? [x1 x2 y1 y2 dir]
+  (= (/ (- x2 x1) (- y2 y1)) (dir-to-slope dir)))
+
+(defn pdf [ind population _ _]
+  (let [ind-x (first (:position ind))
+        ind-y (second (:position ind))]
+    (distance ind (sort-by #(distance ind %) (filter #(and (not (= (:id ind) (:id %)))
+                                                           (= (< ind-x 0) (< ind-y 0))
+                                                           ()) population)))))
+
 
 ; motor neuron functions
 
-; helper
-(defn move-by [ind delta-x delta-y]
+(defn move-angle [ind dir]
   (let [pos-vec (:position ind)
-        new-x (+ (first pos-vec) delta-x)
-        new-y (+ (second pos-vec) delta-y)]
-    (assoc ind :position [new-x new-y])))
-
-(defn move-rand [ind _]
-  (let [rand-move (rand-nth [-5 0 5])]
-    (move-by ind rand-move rand-move)))
-
-(defn move-right [ind _]
-  (move-by ind 5 0))
-(defn move-left [ind _]
-  (move-by ind -5 0))
-(defn move-up [ind _]
-  (move-by ind 0 -5))
-(defn move-down [ind _]
-  (move-by ind 0 5))
+        angle (* dir 45)
+        dist-x (* 5 (Math/round (Math/cos (* angle (/ Math/PI 180)))))
+        dist-y (* 5 (Math/round (Math/sin (* angle (/ Math/PI 180)))))]
+    (assoc ind :position [(+ (first pos-vec) dist-x) (+ (second pos-vec) dist-y)]
+               :direction dir)))
 
 (defn release-pheromone [ind _]
-  (assoc ind :pr true))
+  (assoc ind :pr (not (:pr ind))))
 
 (def sensory-neuron-functions
   {:age age
    :bdx bdx
    :bdy bdy
    :bd  bd
-   :osc osc
-   :nod nearest-object-dist})
+   :oscs osc-sin
+   :oscc osc-cos
+   :nod nearest-object-dist
+   #_:pdr #_pdr
+   :dfc dist-from-center})
 
 (def motor-neuron-functions
-  {:mrnd move-rand
-   :mr   move-right
-   :ml   move-left
-   :mu   move-up
-   :md   move-down
-   :rlp  release-pheromone})
+  {:mrnd (fn [ind _] (move-angle ind (rand-int 8)))
+   :mr   (fn [ind _] (move-angle ind 0))
+   :mdr  (fn [ind _] (move-angle ind 1))
+   :md   (fn [ind _] (move-angle ind 2))
+   :mdl  (fn [ind _] (move-angle ind 3))
+   :ml   (fn [ind _] (move-angle ind 4))
+   :mul  (fn [ind _] (move-angle ind 5))
+   :mu   (fn [ind _] (move-angle ind 6))
+   :mur  (fn [ind _] (move-angle ind 7))
+   #_:rlp  #_release-pheromone})
 
 (def internal-neurons
   {:int1  -1.0
@@ -348,7 +385,7 @@
           (recur (conj cur-val-map-vec (mapv get-children (filterv #(empty? (get-parents %)) syn-vec))) (inc recur-depth)))))
 
 (defn get-weighted-paths
-  [ind population objects]
+  [ind population objects pheromones]
   (let [syn-vec (:neural-map ind)
         source-neurons (distinct (map #(get % :source-neuron) syn-vec))
         sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
@@ -359,7 +396,7 @@
                                              (:sink-neuron %)) syn-vec)
         source-values (apply merge (map #(hash-map % (if
                                                        (contains? sensory-neuron-functions %)
-                                                       ((get sensory-neuron-functions %) ind population objects)
+                                                       ((get sensory-neuron-functions %) ind population objects pheromones)
                                                        (get internal-neurons %)))
                                         source-neurons))]
     (apply merge-with concat
@@ -388,9 +425,9 @@
                        (vec (recur-syn [] mot-syn 0)))))
                  mot-sink-syn-vec))))
 
-(defn calc-motor-output [ind population objects]
+(defn calc-motor-output [ind population objects pheromones]
   (let [mot-val-map
-        (into {} (for [[k v] (get-weighted-paths ind population objects)]
+        (into {} (for [[k v] (get-weighted-paths ind population objects pheromones)]
                    [k (tanh (apply
                               * (map (fn [syn-seq]
                                        (reduce #(tanh (apply * %1 %2))
@@ -451,11 +488,13 @@
     {:id         id
      :genome     genome
      :neural-map (gen-synapse-vec genome)
-     :position   [(rand-nth (range 500 800 5))
+     :position   [(rand-nth (range 5 800 5))
                   (rand-nth (range 5 600 5))]
      :age        0
      :color      [(rand-int 170) (rand-int 170) (rand-int 170)]
-     :pr         false}))
+     :pr         false
+     :direction  -1
+     :pedigree   0}))
 
 
 (defn gen-population [population-size genome-size objects]
@@ -526,11 +565,12 @@
 
 (defn make-child [ind id]
   (assoc ind :id id
-             :position [(rand-nth (range 500 800 5))
+             :position [(rand-nth (range 5 800 5))
                         (rand-nth (range 5 600 5))]
              :age 0
              :pr false
-             :color [(rand-int 170) (rand-int 170) (rand-int 170)]))
+             :color [(rand-int 170) (rand-int 170) (rand-int 170)]
+             :direction -1))
 
 (defn gen-children
   "Generates children, applying selection and mutation"
@@ -563,7 +603,7 @@
         (if (< ticks tpg)
           (recur (inc ticks) generation
                  (mapv
-                   #(let [motor-output (calc-motor-output % population [])]
+                   #(let [motor-output (calc-motor-output % population [] [])]
                       (update
                         (if (empty? motor-output)
                           %
@@ -586,7 +626,7 @@
   (let [gen-size 500
         objects (vec example-object-vec
                      #_(concat example-object-vec (repeatedly 10 create-rand-obj)))]
-    {:population       (gen-population gen-size 16 objects)
+    {:population       (gen-population gen-size 32 objects)
      :objects          objects
      :redzones         red-zones
      :gen-age          0
@@ -601,19 +641,20 @@
 (defn update-ind [ind state]
   (let [population (:population state)
         objects (:objects state)
-        motor-output (calc-motor-output ind population objects)]
+        pheromones (:pheromones state)
+        motor-output (calc-motor-output ind population objects pheromones)]
     (assoc (if (empty? motor-output)
-              ind
-              (if (> (second motor-output) 0)
-                (let [moved-ind (((first motor-output) motor-neuron-functions) ind population)]
-                  (if (collided-borders? ind)
-                    ind
-                    (if (or (collided-any-obj? moved-ind objects)
-                            (collided-any-ind? moved-ind population))
-                      ind
-                      moved-ind)))
-                ind))
-            :age (inc (:age ind)))))
+             ind
+             (if (> (second motor-output) 0)
+               (let [moved-ind (((first motor-output) motor-neuron-functions) ind population)]
+                 (if (collided-borders? ind)
+                   ind
+                   (if (or (collided-any-obj? moved-ind objects)
+                           (collided-any-ind? moved-ind population))
+                     ind
+                     moved-ind)))
+               ind))
+      :age (inc (:age ind)))))
 
 (defn update-state [state]
   (if (< (:gen-age state) (:tpg state))
@@ -621,7 +662,7 @@
       :population (map #(update-ind % state) (:population state))
       :pheromones (concat
                     (mapv #(update % :strength - 2) (filter #(not (<= (:strength %) 0)) (:pheromones state)))
-                    (mapv #(hash-map :position (:position %) :strength 30) (filter #(:pr %) (:population state))))
+                    (mapv #(hash-map :position (:position %) :strength 30 :id (:id %)) (filter #(:pr %) (:population state))))
       :gen-age (inc (:gen-age state)))
     (assoc state
       :population
@@ -652,9 +693,9 @@
     (q/fill 0 (:strength pheromone))
     (q/ellipse (first position) (second position) size size)
     #_(doseq [i (range 10)]
-      (let [actual-size (+ size i)]
-        (q/fill 100 (/ (:strength pheromone) (inc i)))
-        (q/ellipse (first position) (second position) actual-size actual-size)))))
+        (let [actual-size (+ size i)]
+          (q/fill 100 (/ (:strength pheromone) (inc i)))
+          (q/ellipse (first position) (second position) actual-size actual-size)))))
 
 (defn draw-redzone [redzone]
   (q/fill 255 0 0 50)
