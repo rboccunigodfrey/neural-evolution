@@ -5,7 +5,8 @@
   (:require
     [clojure.string :as str]
     [quil.core :as q]
-    [quil.middleware :as m]))
+    [quil.middleware :as m]
+    [clojure.core.async :refer [>! alts!! timeout chan go]]))
 
 ; What we need: data
 ; - structure of an individual: {:genome ["hex string" "..."] :neural-map [...] :position: {:x x :y y} :angle n :age n}
@@ -57,6 +58,10 @@
              (rest (tree-seq #(and (sequential? %) (some sequential? %)) seq x)))
     x))
 
+(defn wait [ms f & args]
+  (let [c (chan)]
+    (go (>! c (apply f args)))
+    (first (alts!! [c (timeout ms)]))))
 
 ; dealing with hex genomes
 
@@ -166,7 +171,9 @@
     (Math/sqrt (+ (* dx dx) (* dy dy)))))
 
 (defn nearest-object-dist [ind _ objects _]
-  (distance-obj ind (reduce #(if (< (distance-obj ind %1) (distance-obj ind %2)) %1 %2) objects)))
+  (if (zero? (count objects))
+    0
+    (distance-obj ind (reduce #(if (< (distance-obj ind %1) (distance-obj ind %2)) %1 %2) objects))))
 
 (defn nnd [ind population _ _]
   (reduce
@@ -196,19 +203,19 @@
   (let [ind-x (first (:position ind))
         ind-y (second (:position ind))
         dist-ph #(distance-general
-                    ind-x
-                    (first (:position %))
-                    ind-y
-                    (second (:position %)))
+                   ind-x
+                   (first (:position %))
+                   ind-y
+                   (second (:position %)))
         near-ph (filter #(and (not (= (:id %) (:id ind)))
                               (< (- (dist-ph %)) 30))
                         pheromones)]
     (if (zero? (count near-ph))
       0
       (* 10 (reduce #(+ %1 (* (:strength %2) (/ 1 (+ 1 (dist-ph %2)))))
-              (* (:strength (first near-ph))
-                 (/ 1 (+ 1 (dist-ph (first near-ph)))))
-              (rest near-ph))))))
+                    (* (:strength (first near-ph))
+                       (/ 1 (+ 1 (dist-ph (first near-ph)))))
+                    (rest near-ph))))))
 
 (defn dir-to-slope [dir]
   )
@@ -238,15 +245,12 @@
   (assoc ind :pr (not (:pr ind))))
 
 (def sensory-neuron-functions
-  {:age age
-   :bdx bdx
-   :bdy bdy
-   :bd  bd
+  {:age  age
    :oscs osc-sin
    :oscc osc-cos
-   :nod nearest-object-dist
+   :nod  nearest-object-dist
    #_:pdr #_pdr
-   :dfc dist-from-center})
+   :dfc  dist-from-center})
 
 (def motor-neuron-functions
   {:mrnd (fn [ind _] (move-angle ind (rand-int 8)))
@@ -315,74 +319,104 @@
      {:sink-neuron :int7, :weight 0.8656, :source-neuron :int2}
      {:sink-neuron :mu, :weight 0.9345, :source-neuron :int7}])
 
-#_(defn neural-vals-v2 [ind population]
-    (let [syn-vec (filter-dup-synapses (:neural-map ind))
-          source-neurons (distinct (map #(get % :source-neuron) syn-vec))
-          sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
-          int-sink-neurons (filter #(contains? internal-neurons %) sink-neurons)
-          int-sink-syn-vec (filter #(contains? internal-neurons
-                                               (:sink-neuron %)) syn-vec)
-          mot-sink-syn-vec (filter #(contains? motor-neuron-functions
-                                               (:sink-neuron %)) syn-vec)
-          grouped-mot (group-by :sink-neuron mot-sink-syn-vec)
-          num-grouped-mot (frequencies (map :sink-neuron mot-sink-syn-vec))
-          get-parents (fn [child]
-                        (filterv #(= (:sink-neuron %)
-                                     (:source-neuron child))
-                                 int-sink-syn-vec))
-          get-children (fn [parent]
-                         (filterv #(= (:source-neuron %)
-                                      (:sink-neuron parent))
-                                  syn-vec))]
-      #_(prn syn-vec)
-      (prn (filterv #(empty? (get-parents %)) syn-vec))
-      (loop [cur-values (filter-dup-synapses (into [] (flatten (mapv get-children
-                                                                     (filterv #(empty? (get-parents %)) syn-vec)))))
-             recur-depth 0]
-        (let [children (filter-dup-synapses (flatten (mapv #(conj (get-children %) %) cur-values)))
-              child-mot-freq (frequencies (map :sink-neuron (filter #(contains? motor-neuron-functions
-                                                                                (:sink-neuron %)) children)))]
-          (prn num-grouped-mot)
-          (prn child-mot-freq)
-          (if (or (> recur-depth 300) (= num-grouped-mot child-mot-freq))
-            cur-values
-            (recur children (inc recur-depth))))
-        #_(recur (mapv #(conj (get-children %) %) cur-values) (inc recur-depth)))
-      #_(loop [cur-values
-               (mapv
-                 #(hash-map
-                    :sink-neuron (:sink-neuron %)
-                    :value (tanh (* (if (contains? sensory-neuron-functions (:source-neuron %))
-                                      ((get sensory-neuron-functions (:source-neuron %)) ind population)
-                                      (get internal-neurons (:source-neuron %)))
-                                    (:weight %))))
-                 (filter-dup-synapses
-                   (into [] (flatten (mapv get-children
-                                           (filterv #(empty? (get-parents %)) syn-vec))))))
-               recur-depth 0]
-          (let [motor-values (filter #(contains? motor-neuron-functions (:sink-neuron %)) cur-values)]
-            (if (or (> recur-depth 300) (= (count motor-values) (count cur-values)))
-              cur-values
-              (recur
-                (mapv
-                  (fn [child]
-                    (if (contains? motor-neuron-functions (:sink-neuron child))
-                      (reduce
-                        #(tanh (* % (:value %2)))
-                        (:value child)
-                        (filter #(= (:sink-neuron child) (:sink-neuron %)) (flatten (mapv get-children syn-vec))))
-                      (hash-map
-                        :sink-neuron (:sink-neuron child)
-                        :value (tanh (* (:value child)
-                                        (get internal-neurons (:source-neuron child))
-                                        (:weight child)))
-                        :source-neuron (:source-neuron child))))
-                  (filter-dup-synapses
-                    (into [] (flatten (mapv get-children cur-values)))))
-                (inc recur-depth)))))
-      #_(postwalk #(if (empty? (get-parents %)) % (get-parents %)) (get-parents mot-sink-syn-vec))
-      #_(loop [cur-val-map-vec [] recur-depth 0]
-          (recur (conj cur-val-map-vec (mapv get-children (filterv #(empty? (get-parents %)) syn-vec))) (inc recur-depth)))))
+(defn neural-paths [ind population objects pheromones]
+  (let [syn-vec (filter-dup-synapses (:neural-map ind))
+        get-parents (fn [child]
+                      (filterv #(= (:sink-neuron %)
+                                   (:source-neuron child))
+                               syn-vec))
+        get-children (fn [parent]
+                       (filterv #(= (:sink-neuron parent)
+                                    (:source-neuron %))
+                                syn-vec))
+        get-value (fn [syn]
+                    (if (contains? sensory-neuron-functions (:source-neuron syn))
+                      (((:source-neuron syn) sensory-neuron-functions) ind population objects pheromones)
+                      ((:source-neuron syn) internal-neurons)))
+        origin-syn-vec (filterv #(empty? (get-parents %)) syn-vec)
+        add-to-path (fn [path syn-vec]
+                      (conj
+                        path
+                        (if (in? origin-syn-vec syn-vec)
+                          [(:source-neuron syn-vec) (:weight syn-vec) (get-value syn-vec) (:sink-neuron syn-vec)]
+                          [(:source-neuron syn-vec) (:weight syn-vec) (:sink-neuron syn-vec)])))]
+    (println (apply str (interleave (sort-by :sink-neuron syn-vec) (repeat "\r\n"))))
+    (mapv
+      (fn [origin-syn]
+        (letfn [(recur-syn [motor-outputs cur-syn depth]
+                  (if (> depth 50)
+                    (conj motor-outputs "error")
+                    (if (contains? motor-neuron-functions (:sink-neuron cur-syn))
+                      (add-to-path motor-outputs cur-syn)
+                      (mapv
+                        #(recur-syn
+                           (conj
+                             motor-outputs
+                             (add-to-path motor-outputs cur-syn)
+                             #_(if (in? origin-syn-vec %)
+                                 [(:source-neuron cur-syn) (get-value cur-syn) (:weight cur-syn)]
+                                 [(:source-neuron cur-syn) (:weight cur-syn)]))
+                           %
+                           (inc depth))
+                        (get-children cur-syn)))))]
+          (recur-syn [] origin-syn 0))) origin-syn-vec)))
+
+(defn collate-values [ind population objects pheromones]
+  (let [neural-vals (distinct
+                      (filter
+                        not-empty
+                        (flatten-btm-lvl (neural-paths ind population objects pheromones))))]
+    (loop [motor-vals {} known-vals {} remaining neural-vals]
+      (if (= (count (filter #(contains? motor-neuron-functions
+                               (:sink-neuron %)) (:neural-map ind))) (count motor-vals))
+        motor-vals
+        (if (contains? motor-neuron-functions (last (first remaining)))
+          (if (= 4 (count (first remaining)))
+            (recur (assoc motor-vals
+                     (last (first remaining))
+                     (if (contains? motor-vals (last (first remaining)))
+                       (tanh (+ (tanh (apply * (take 2 (rest (first remaining)))))
+                                ((last (first remaining)) motor-vals)))
+                       (tanh (apply * (take 2 (rest (first remaining)))))))
+                   known-vals
+                   (rest remaining))
+            (if (every? #(contains? known-vals (first %))
+                        (filter #(= (first (first remaining))
+                                    (last %)) neural-vals))
+              (recur (assoc motor-vals
+                       (last (first remaining))
+                       (reduce
+                         #(tanh (+ %1 %2))
+                         (mapv #(* ((first %) known-vals)
+                                   (second (first remaining)))
+                               (filter #(= (first (first remaining))
+                                           (last %)) neural-vals))))
+                     known-vals
+                     (rest remaining))
+              (recur motor-vals known-vals (conj (rest remaining) (first remaining)))))
+          (if (= 4 (count (first remaining)))
+            (recur motor-vals
+                   (assoc known-vals
+                     (first (first remaining))
+                     (if (contains? known-vals (first (first remaining)))
+                       (tanh (+ (tanh (apply * (take 2 (rest (first remaining)))))
+                                ((first (first remaining)) known-vals)))
+                       (tanh (apply * (take 2 (rest (first remaining)))))))
+                   (rest remaining))
+            (if (every? #(contains? known-vals (first %))
+                        (filter #(= (first (first remaining))
+                                    (last %)) neural-vals))
+              (recur motor-vals
+                     (assoc known-vals
+                       (first (first remaining))
+                       (reduce
+                         #(tanh (+ %1 %2))
+                         (mapv #(* ((first %) known-vals)
+                                   (second (first remaining)))
+                               (filter #(= (first (first remaining))
+                                           (last %)) neural-vals))))
+                     (rest remaining))
+              (recur motor-vals known-vals (conj (rest remaining) (first remaining))))))))))
 
 (defn get-weighted-paths
   [ind population objects pheromones]
@@ -739,5 +773,3 @@
   (case view
     :textual (evolve-agents 500 300 12 100 :right :replace)
     :visual (defonce sketch (animate-agents))))
-
-(-main :visual)
