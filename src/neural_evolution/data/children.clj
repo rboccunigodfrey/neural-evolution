@@ -1,7 +1,7 @@
-(ns quil-workflow.data.children
-  (:use [quil-workflow.data.objects-zones]
-        [quil-workflow.evolution.mutation]
-        [quil-workflow.evolution.selection]))
+(ns neural-evolution.data.children
+  (:use [neural-evolution.data.objects-zones]
+        [neural-evolution.evolution.mutation]
+        [neural-evolution.evolution.selection]))
 
 (defn make-child [ind id]
   (assoc ind :id id

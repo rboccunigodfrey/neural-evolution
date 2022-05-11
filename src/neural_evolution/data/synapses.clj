@@ -1,9 +1,9 @@
-(ns quil-workflow.data.synapses
-  (:use [quil-workflow.data.neurons.internal]
-        [quil-workflow.data.neurons.sensory]
-        [quil-workflow.data.neurons.motor]
-        [quil-workflow.data.genomes]
-        [quil-workflow.utils.utils]))
+(ns neural-evolution.data.synapses
+  (:use [neural-evolution.data.neurons.internal]
+        [neural-evolution.data.neurons.sensory]
+        [neural-evolution.data.neurons.motor]
+        [neural-evolution.data.genomes]
+        [neural-evolution.utils.utils]))
 
 ; Generating neural network
 

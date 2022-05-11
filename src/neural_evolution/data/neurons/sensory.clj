@@ -1,5 +1,5 @@
-(ns quil-workflow.data.neurons.sensory
-  (:use [quil-workflow.utils.utils]))
+(ns neural-evolution.data.neurons.sensory
+  (:use [neural-evolution.utils.utils]))
 
 ; sensory neuron functions
 

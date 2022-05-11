@@ -1,6 +1,6 @@
-(ns quil-workflow.evolution.selection
-  (:use [quil-workflow.utils.utils]
-        [quil-workflow.data.objects-zones]))
+(ns neural-evolution.evolution.selection
+  (:use [neural-evolution.utils.utils]
+        [neural-evolution.data.objects-zones]))
 
 ; selection methods
 

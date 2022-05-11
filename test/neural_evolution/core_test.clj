@@ -1,4 +1,4 @@
-(ns quil-workflow.core-test
+(ns neural_evolution.core-test
   (:require [clojure.test :refer :all]
             [quil-workflow.core :refer :all]))
 

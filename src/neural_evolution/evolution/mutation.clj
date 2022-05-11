@@ -1,6 +1,6 @@
-(ns quil-workflow.evolution.mutation
+(ns neural-evolution.evolution.mutation
   (:require [clojure.string :as str])
-  (:use [quil-workflow.data.synapses]))
+  (:use [neural-evolution.data.synapses]))
 
 ; mutation
 

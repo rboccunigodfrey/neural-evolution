@@ -1,4 +1,4 @@
-(defproject quil-workflow "0.1.0-SNAPSHOT"
+(defproject neural-evolution "0.1.0-SNAPSHOT"
   :description "FIXME: write description"
   :url "http://example.com/FIXME"
   :license {:name "EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"
@@ -6,4 +6,4 @@
   :dependencies [[org.clojure/clojure "1.10.3"]
                  [quil "3.1.0"]
                  [org.clojure/core.async "1.5.648"]]
-  :repl-options {:init-ns quil-workflow.core})
+  :repl-options {:init-ns neural-evolution.core})

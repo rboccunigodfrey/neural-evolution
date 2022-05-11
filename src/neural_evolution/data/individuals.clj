@@ -1,7 +1,7 @@
-(ns quil-workflow.data.individuals
-  (:use [quil-workflow.data.objects-zones]
-        [quil-workflow.data.genomes]
-        [quil-workflow.data.synapses]))
+(ns neural-evolution.data.individuals
+  (:use [neural-evolution.data.objects-zones]
+        [neural-evolution.data.genomes]
+        [neural-evolution.data.synapses]))
 
 ; population generation
 

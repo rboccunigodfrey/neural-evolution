@@ -1,4 +1,4 @@
-(ns quil-workflow.data.neurons.internal)
+(ns neural-evolution.data.neurons.internal)
 
 (def internal-neurons
   {:int1  -1.0

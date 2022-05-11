@@ -1,13 +1,13 @@
-(ns quil-workflow.views.visual
+(ns neural-evolution.views.visual
   (:require
     [quil.core :as q]
     [quil.middleware :as m])
-  (:use [quil-workflow.data.synapses]
-        [quil-workflow.data.individuals]
-        [quil-workflow.data.children]
-        [quil-workflow.data.objects-zones]
-        [quil-workflow.data.neurons.motor]
-        [quil-workflow.evolution.selection]))
+  (:use [neural-evolution.data.synapses]
+        [neural-evolution.data.individuals]
+        [neural-evolution.data.children]
+        [neural-evolution.data.objects-zones]
+        [neural-evolution.data.neurons.motor]
+        [neural-evolution.evolution.selection]))
 
 ; ---------------- QUIL ---------------------
 

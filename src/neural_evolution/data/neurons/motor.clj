@@ -1,4 +1,4 @@
-(ns quil-workflow.data.neurons.motor)
+(ns neural-evolution.data.neurons.motor)
 
 ; motor neuron functions
 

@@ -1,4 +1,4 @@
-(ns quil-workflow.utils.utils
+(ns neural-evolution.utils.utils
   (:require
     [clojure.core.async :refer [>! alts!! timeout chan go]]))
 

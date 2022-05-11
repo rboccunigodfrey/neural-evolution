@@ -1,4 +1,4 @@
-(ns quil-workflow.data.genomes
+(ns neural-evolution.data.genomes
   (:require [clojure.string :as str]))
 
 ; dealing with hex genomes

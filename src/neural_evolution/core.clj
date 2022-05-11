@@ -1,9 +1,9 @@
 ; Adaptation of David Randall Miller's evolutionary program by Rafael Boccuni-Godfrey and Aryan Raval
 ; https://www.youtube.com/watch?v=N3tRFayqVtk
 
-(ns quil-workflow.core
-  (:use [quil-workflow.views.textual]
-        [quil-workflow.views.visual]))
+(ns neural-evolution.core
+  (:use [neural-evolution.views.textual]
+        [neural-evolution.views.visual]))
 
 
 (defn -main [view]

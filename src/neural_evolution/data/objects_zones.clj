@@ -1,4 +1,4 @@
-(ns quil-workflow.data.objects-zones)
+(ns neural-evolution.data.objects-zones)
 
 ;; ---------------- OBJECTS/ZONES ---------------------
 

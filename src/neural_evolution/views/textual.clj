@@ -1,10 +1,10 @@
-(ns quil-workflow.views.textual
-  (:use [quil-workflow.data.synapses]
-        [quil-workflow.data.individuals]
-        [quil-workflow.data.children]
-        [quil-workflow.data.objects-zones]
-        [quil-workflow.data.neurons.motor]
-        [quil-workflow.evolution.selection]))
+(ns neural-evolution.views.textual
+  (:use [neural-evolution.data.synapses]
+        [neural-evolution.data.individuals]
+        [neural-evolution.data.children]
+        [neural-evolution.data.objects-zones]
+        [neural-evolution.data.neurons.motor]
+        [neural-evolution.evolution.selection]))
 
 ; main textual evo loop
 
