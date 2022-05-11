@@ -252,8 +252,9 @@
    :oscs osc-sin
    :oscc osc-cos
    :nod  nearest-object-dist
-   :pdr pdr
-   :dfc  dist-from-center})
+   #_:pdr  #_pdr
+   :dfc  dist-from-center
+   :nnd  nnd})
 
 (def motor-neuron-functions
   {:mrnd (fn [ind _] (move-angle ind (rand-int 8)))
@@ -265,7 +266,7 @@
    :mul  (fn [ind _] (move-angle ind 5))
    :mu   (fn [ind _] (move-angle ind 6))
    :mur  (fn [ind _] (move-angle ind 7))
-   :rlp  release-pheromone})
+   #_:rlp  #_release-pheromone})
 
 (def internal-neurons
   {:int1  -1.0
@@ -371,7 +372,7 @@
                         (flatten-btm-lvl (neural-paths ind population objects pheromones))))]
     (loop [motor-vals {} known-vals {} remaining neural-vals]
       (if (= (count (filter #(contains? motor-neuron-functions
-                               (:sink-neuron %)) (:neural-map ind))) (count motor-vals))
+                                        (:sink-neuron %)) (:neural-map ind))) (count motor-vals))
         motor-vals
         (if (contains? motor-neuron-functions (last (first remaining)))
           (if (= 4 (count (first remaining)))
@@ -507,14 +508,16 @@
       (<= (second (:position ind)) 5) (>= (second (:position ind)) 595)))
 
 (def example-object-vec
-  [{:x 300 :y 0 :w 20 :h 260}
-   {:x 300 :y 320 :w 20 :h 280}])
+  [{:x 300 :y 0 :w 20 :h 90}
+   {:x 300 :y 110 :w 20 :h 180}
+   {:x 300 :y 310 :w 20 :h 180}
+   {:x 300 :y 510 :w 20 :h 90}])
 
 (def red-zones
-  [{:x 0 :y 0 :w 800 :h 20}
+  [#_{:x 0 :y 0 :w 800 :h 20}
    #_{:x 0 :y 0 :w 20 :h 600}
    #_{:x 780 :y 0 :w 20 :h 600}
-   {:x 0 :y 580 :w 800 :h 20}])
+   #_{:x 0 :y 580 :w 800 :h 20}])
 
 ; ---------------- EVOLUTION ---------------------
 
@@ -548,12 +551,10 @@
 ; selection methods
 
 (defn select-right [population]
-  (let [filtered-pop (filterv #(> (first (:position %)) 600) population)]
-    filtered-pop))
+  (filterv #(> (first (:position %)) 600) population))
 
 (defn select-left [population]
-  (let [filtered-pop (filterv #(< (first (:position %)) 200) population)]
-    filtered-pop))
+  (filterv #(< (first (:position %)) 200) population))
 
 (defn select-circle [population x y]
   (let [radius 100]
@@ -588,7 +589,7 @@
 ; mutation
 
 (defn repl-mutate [ind]
-  (let [new-genome (mapv #(if (< 0.01 (rand))
+  (let [new-genome (mapv #(if (< 0.02 (rand))
                             (mutate-hex %)
                             %) (:genome ind))]
     (assoc ind :genome new-genome
@@ -607,7 +608,8 @@
              :age 0
              :pr false
              :color [(rand-int 170) (rand-int 170) (rand-int 170)]
-             :direction -1))
+             :direction -1
+             :pedigree (inc (:pedigree ind))))
 
 (defn gen-children
   "Generates children, applying selection and mutation"
@@ -660,7 +662,7 @@
   (q/smooth)
   (q/frame-rate 60)
   (q/background 255)
-  (let [gen-size 500
+  (let [gen-size 250
         objects (vec example-object-vec
                      #_(concat example-object-vec (repeatedly 10 create-rand-obj)))]
     {:population       (gen-population gen-size 32 objects)
@@ -701,18 +703,20 @@
                     (mapv #(update % :strength - 2) (filter #(not (<= (:strength %) 0)) (:pheromones state)))
                     (mapv #(hash-map :position (:position %) :strength 30 :id (:id %)) (filter #(:pr %) (:population state))))
       :gen-age (inc (:gen-age state)))
-    (assoc state
-      :population
-      (gen-children (:population state)
-                    (:objects state)
-                    (:redzones state)
-                    (:selection-method state)
-                    (:mutation-method state)
-                    (:gen-size state))
-      :gen-age 0
-      :generation (inc (:generation state))
-      :prev-survivors (count (filter-redzones ((select-method (:selection-method state))
-                                               (:population state)) (:redzones state))))))
+    (let [new-objects (:objects state) #_(concat example-object-vec (repeatedly 10 create-rand-obj))]
+      (assoc state
+        :population
+        (gen-children (:population state)
+                      new-objects
+                      (:redzones state)
+                      (:selection-method state)
+                      (:mutation-method state)
+                      (:gen-size state))
+        :objects new-objects
+        :gen-age 0
+        :generation (inc (:generation state))
+        :prev-survivors (count (filter-redzones ((select-method (:selection-method state))
+                                                 (:population state)) (:redzones state)))))))
 
 (defn draw-ind [ind]
   (let [size 5
@@ -728,11 +732,7 @@
   (let [size 5
         position (:position pheromone)]
     (q/fill 0 (:strength pheromone))
-    (q/ellipse (first position) (second position) size size)
-    #_(doseq [i (range 10)]
-        (let [actual-size (+ size i)]
-          (q/fill 100 (/ (:strength pheromone) (inc i)))
-          (q/ellipse (first position) (second position) actual-size actual-size)))))
+    (q/ellipse (first position) (second position) size size)))
 
 (defn draw-redzone [redzone]
   (q/fill 255 0 0 50)
@@ -757,7 +757,8 @@
   (q/fill 0)
   (q/text (str "Generation: " (:generation state)
                "\nPrevious survivors: " (:prev-survivors state)
-               "\nPheromone count: " (count (:pheromones state)))
+               "\nPheromone count: " (count (:pheromones state))
+               #_"\nBest lineage age: " #_(:pedigree (apply max-key :pedigree (:population state))))
           830 20))
 
 (defn animate-agents []
