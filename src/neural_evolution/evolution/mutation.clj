@@ -17,13 +17,13 @@
               (rand-nth replacements)
               (take-last (- hex-size split-loc) hex)]))))
 
-(defn repl-mutate [ind]
-  (let [new-genome (mapv #(if (< 0.02 (rand))
+(defn repl-mutate [ind weight]
+  (let [new-genome (mapv #(if (< weight (rand))
                             (mutate-hex %)
                             %) (:genome ind))]
     (assoc ind :genome new-genome
                :neural-map (gen-synapse-vec new-genome))))
 
-(defn mutation-method [method]
+(defn mutation-method [method weight]
   (case method
-    :replace repl-mutate))
+    :replace #(repl-mutate % weight)))

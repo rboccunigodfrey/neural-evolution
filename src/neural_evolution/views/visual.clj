@@ -19,9 +19,9 @@
   (let [gen-size 250
         genome-size 32
         objects (flatten example-object-vec)
-        max-food 50
-        food (for [i (range max-food)]
-               (create-rand-food i))]
+        max-food 75
+        food (vec (for [i (range max-food)]
+               (create-rand-food i)))]
     {:population       (gen-population gen-size genome-size objects)
      :objects          objects
      :redzones         red-zones
@@ -31,7 +31,7 @@
      :prev-survivors   0
      :gen-size         gen-size
      :genome-size      genome-size
-     :tpg              200
+     :tpg              250
      :selection-method :pos-energy
      :mutation-method  :replace
      :pheromones       []
@@ -47,14 +47,15 @@
         motor-output (calc-motor-output ind population objects pheromones food)
         updated-ind (assoc ind
                       :age (inc (:age ind))
-                      :energy (int (- (:energy ind) (+ 1 (/ (* (inc (:kill-count ind))) (inc (:gather-count ind))))))
+                      :energy (double (- (:energy ind) (+ 0.5 (* (:kill-cooldown ind) 0.2))))
                       :color [(if (:hunter ind) 255 0)
                               0
                               (if (:gatherer ind) 255 0)]
                       :killing-id -1
                       :gathering-id -1
                       :pr false
-                      :kill-cooldown (if (> (:kill-cooldown ind)  0) (dec (:kill-cooldown ind)) 0))]
+                      :kill-cooldown (if (> (:kill-cooldown ind)  0) (dec (:kill-cooldown ind)) 0)
+                      :gather-cooldown (if (> (:gather-cooldown ind)  0) (dec (:gather-cooldown ind)) 0))]
     (if (or (>= 0 (:energy updated-ind)) (empty? motor-output))
       updated-ind
       (if (> (second motor-output) 0)
@@ -68,12 +69,12 @@
         updated-ind))))
 
 (defn update-state [state]
-  (if (< (:gen-age state) (:tpg state))
+  (if (and (< (:gen-age state) (:tpg state)) (not-every? #(<= (:energy %) 0) (:population state)))
     (let [population (:population state)
-          death-ids (distinct (filter #(>= % 0) (mapv :killing-id population)))
-          remaining-population (filter #(not (in? death-ids (:id %))) population)
-          eaten-food-ids (distinct (filter #(>= % 0) (mapv :gathering-id population)))
-          remaining-food (filter #(not (in? eaten-food-ids (:id %))) (:food state))]
+          death-ids (distinct (filterv #(>= % 0) (mapv :killing-id population)))
+          remaining-population (filterv #(not (in? death-ids (:id %))) population)
+          eaten-food-ids (distinct (filterv #(>= % 0) (mapv :gathering-id population)))
+          remaining-food (filterv #(not (in? eaten-food-ids (:id %))) (:food state))]
       (assoc state
         :population (map #(update-ind % state) remaining-population)
         :pheromones [] #_(concat
@@ -101,8 +102,8 @@
                       (:gen-size state)
                       (:genome-size state))
         :objects new-objects
-        :food (for [i (range (:max-food state))]
-                (create-rand-food i))
+        :food (vec (for [i (range (:max-food state))]
+                (create-rand-food i)))
         :gen-age 0
         :deaths 0
         :generation (inc (:generation state))
@@ -172,7 +173,7 @@
                "\nPrevious survivors: " (:prev-survivors state)
                #_"\nPheromone count: " #_(count (:pheromones state))
                "\nMost kills: " (:kill-count (apply max-key :kill-count (:population state)))
-               "\nHighest energy: " (:energy (apply max-key :energy (:population state)))
+               "\nHighest energy: " (int (:energy (apply max-key :energy (:population state))))
                "\nDeaths: " (:deaths state)
                "\nFood count: " (count (:food state)))
           830 20))

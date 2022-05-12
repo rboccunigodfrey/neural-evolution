@@ -19,7 +19,7 @@
   (create-food id
                (rand-nth (range 5 800 5))
                (rand-nth (range 5 600 5))
-               (rand-nth (range 10 15))))
+               (rand-nth (range 20 25))))
 
 ; collisions
 

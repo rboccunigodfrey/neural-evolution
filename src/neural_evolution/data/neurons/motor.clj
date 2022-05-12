@@ -27,22 +27,28 @@
       ind
       (assoc ind :killing-id (:id prey)
                  :kill-count (inc (:kill-count ind))
-                 :energy (+ (:energy ind) (:energy prey))
-                 :hunter (> (- (:gather-count ind)
-                               (:kill-count ind)) 10)
-                 :kill-cooldown 10))))
+                 :energy (+ (:energy ind) (:energy prey) 2)
+                 :hunter (if (not (:hunter ind))
+                           (> (- (:gather-count ind)
+                               (:kill-count ind)) 5)
+                           true)
+                 :kill-cooldown 25))))
 
 (defn gather [ind _ food]
   (let [adj-food (filter #(< (distance-food ind %) 7) food)]
     (if (or (:hunter ind)
-            (zero? (count adj-food)))
+            (zero? (count adj-food))
+            (not (zero? (:gather-cooldown ind))))
       #_(zero? (count adj-food))
       ind
       (assoc ind :gathering-id (:id (first adj-food))
                  :gather-count (inc (:gather-count ind))
                  :energy (+ (:energy ind) (:energy (first adj-food)))
-                 :gatherer (> (- (:kill-count ind)
-                                (:gather-count ind)) 10)))))
+                 :gatherer (if (not (:gatherer ind))
+                             (> (- (:kill-count ind)
+                                   (:gather-count ind)) 10)
+                             true)
+                 :gather-cooldown 5))))
 
 (def motor-neuron-functions
   {:mrnd (fn [ind _ _] (move-angle ind (rand-int 8)))
