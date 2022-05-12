@@ -11,6 +11,16 @@
                  (rand-nth (range 10 60))
                  (rand-nth (range 10 60))))
 
+
+(defn create-food [id x y e]
+  {:id id :x x :y y :energy e})
+
+(defn create-rand-food [id]
+  (create-food id
+               (rand-nth (range 5 800 5))
+               (rand-nth (range 5 600 5))
+               (rand-nth (range 10 15))))
+
 ; collisions
 
 (defn collided-obj? [ind obj]
@@ -34,13 +44,13 @@
       (<= (second (:position ind)) 5) (>= (second (:position ind)) 595)))
 
 (def example-object-vec
-  [{:x 280 :y 0 :w 20 :h 90}
+  [#_[{:x 280 :y 0 :w 20 :h 90}
    {:x 280 :y 110 :w 20 :h 180}
    {:x 280 :y 310 :w 20 :h 180}
    {:x 280 :y 510 :w 20 :h 90}
    {:x 500 :y 200 :w 20 :h 200}
    {:x 500 :y 0 :w 20 :h 160}
-   {:x 500 :y 440 :w 20 :h 160}])
+   {:x 500 :y 440 :w 20 :h 160}]])
 
 (def red-zones
   [#_{:x 0 :y 0 :w 800 :h 20}
@@ -49,4 +59,12 @@
    #_{:x 0 :y 580 :w 800 :h 20}])
 
 (def green-zones
-  [{:x 300 :y 200 :w 200 :h 200}])
+  [#_{:x 0 :y 0 :w 200 :h 600}])
+
+(defn filter-redzones [population redzones]
+  (filterv #(not (collided-any-obj? % redzones)) population))
+
+(defn filter-greenzones [population greenzones]
+  (if (empty? green-zones)
+    population
+    (filterv #(collided-any-obj? % greenzones) population)))

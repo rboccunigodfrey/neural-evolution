@@ -45,7 +45,7 @@
      {:sink-neuron :int7, :weight 0.8656, :source-neuron :int2}
      {:sink-neuron :mu, :weight 0.9345, :source-neuron :int7}])
 
-(defn neural-paths [ind population objects pheromones]
+(defn neural-paths [ind population objects pheromones food]
   (let [syn-vec (filter-dup-synapses (:neural-map ind))
         get-parents (fn [child]
                       (filterv #(= (:sink-neuron %)
@@ -57,7 +57,7 @@
                                 syn-vec))
         get-value (fn [syn]
                     (if (contains? sensory-neuron-functions (:source-neuron syn))
-                      (((:source-neuron syn) sensory-neuron-functions) ind population objects pheromones)
+                      (((:source-neuron syn) sensory-neuron-functions) ind population objects pheromones food)
                       ((:source-neuron syn) internal-neurons)))
         origin-syn-vec (filterv #(empty? (get-parents %)) syn-vec)
         add-to-path (fn [path syn-vec]
@@ -87,11 +87,11 @@
                         (get-children cur-syn)))))]
           (recur-syn [] origin-syn 0))) origin-syn-vec)))
 
-(defn collate-values [ind population objects pheromones]
+(defn collate-values [ind population objects pheromones food]
   (let [neural-vals (distinct
                       (filter
                         not-empty
-                        (flatten-btm-lvl (neural-paths ind population objects pheromones))))]
+                        (flatten-btm-lvl (neural-paths ind population objects pheromones food))))]
     (loop [motor-vals {} known-vals {} remaining neural-vals]
       (if (= (count (filter #(contains? motor-neuron-functions
                                         (:sink-neuron %)) (:neural-map ind))) (count motor-vals))
@@ -145,7 +145,7 @@
               (recur motor-vals known-vals (conj (rest remaining) (first remaining))))))))))
 
 (defn get-weighted-paths
-  [ind population objects pheromones]
+  [ind population objects pheromones food]
   (let [syn-vec (:neural-map ind)
         source-neurons (distinct (map #(get % :source-neuron) syn-vec))
         sink-neurons (distinct (map #(get % :sink-neuron) syn-vec))
@@ -156,7 +156,7 @@
                                              (:sink-neuron %)) syn-vec)
         source-values (apply merge (map #(hash-map % (if
                                                        (contains? sensory-neuron-functions %)
-                                                       ((get sensory-neuron-functions %) ind population objects pheromones)
+                                                       ((get sensory-neuron-functions %) ind population objects pheromones food)
                                                        (get internal-neurons %)))
                                         source-neurons))]
     (apply merge-with concat
@@ -185,9 +185,9 @@
                        (vec (recur-syn [] mot-syn 0)))))
                  mot-sink-syn-vec))))
 
-(defn calc-motor-output [ind population objects pheromones]
+(defn calc-motor-output [ind population objects pheromones food]
   (let [mot-val-map
-        (into {} (for [[k v] (get-weighted-paths ind population objects pheromones)]
+        (into {} (for [[k v] (get-weighted-paths ind population objects pheromones food)]
                    [k (tanh (apply
                               * (map (fn [syn-seq]
                                        (reduce #(tanh (apply * %1 %2))

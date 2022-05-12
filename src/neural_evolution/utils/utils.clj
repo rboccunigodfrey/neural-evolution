@@ -40,6 +40,13 @@
         y2 (second (:position i2))]
     (distance-general x1 x2 y1 y2)))
 
+(defn distance-food [i1 food]
+  (let [x1 (first (:position i1))
+        x2 (:x food)
+        y1 (second (:position i1))
+        y2 (:y food)]
+    (distance-general x1 x2 y1 y2)))
+
 ; distance from individual to closest point on object
 (defn distance-obj [ind obj]
   (let [rect-min-x (:x obj)

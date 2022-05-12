@@ -31,11 +31,8 @@
 (defn select-right-circle [population]
   (select-circle population 600 300))
 
-(defn filter-redzones [population redzones]
-  (filterv #(not (collided-any-obj? % redzones)) population))
-
-(defn filter-greenzones [population greenzones]
-  (filterv #(collided-any-obj? % greenzones) population))
+(defn select-pos-energy [population]
+  (filterv #(> (:energy %) 0) population))
 
 (defn select-method [method]
   (case method
@@ -44,4 +41,5 @@
     :center select-center
     :central-circle select-central-circle
     :right-circle select-right-circle
-    :left-circle select-left-circle))
+    :left-circle select-left-circle
+    :pos-energy select-pos-energy))

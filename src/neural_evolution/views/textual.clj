@@ -19,7 +19,7 @@
         (if (< ticks tpg)
           (recur (inc ticks) generation
                  (mapv
-                   #(let [motor-output (calc-motor-output % population [] [])]
+                   #(let [motor-output (calc-motor-output % population [] [] [])]
                       (update
                         (if (empty? motor-output)
                           %
