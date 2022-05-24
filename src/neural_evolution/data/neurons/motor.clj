@@ -17,11 +17,12 @@
 
 (defn kill [ind population _]
   (let [adj-pop (filter #(and (not (= (:id ind) (:id %)))
-                              (< (distance ind %) 7))
+                              (< (distance ind %) 5))
                         population)
         prey (first adj-pop)]
     (if (or (zero? (count adj-pop))
             (:gatherer ind)
+            (>= (:energy ind) (:max-energy ind))
             (and (not (:gatherer prey)) (>= (:energy prey) (:energy ind)))
             (not (zero? (:kill-cooldown ind))))
       ind
@@ -34,9 +35,10 @@
                  :kill-cooldown 20))))
 
 (defn gather [ind _ food]
-  (let [adj-food (filter #(< (distance-food ind %) 7) food)]
+  (let [adj-food (filter #(< (distance-food ind %) 5) food)]
     (if (or (zero? (count adj-food))
             (:hunter ind)
+            (>= (:energy ind) (:max-energy ind))
             (not (zero? (:gather-cooldown ind))))
       #_(zero? (count adj-food))
       ind

@@ -61,7 +61,9 @@
 (def food-zones
   [{:x 650 :y 250 :w 50 :h 50}
    {:x 50 :y 50 :w 50 :h 50}
-   {:x 50 :y 500 :w 50 :h 50}])
+   {:x 50 :y 500 :w 50 :h 50}
+   {:x 215 :y 180 :w 40 :h 40}
+   {:x 215 :y 420 :w 40 :h 40}])
 
 (defn create-rand-food [id]
   (let [possible-pos

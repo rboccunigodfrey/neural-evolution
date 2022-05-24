@@ -28,39 +28,41 @@
       children
       (let [slow-rate 0.01
             fast-rate 0.125
-            filtered-pop (filter-redzones
-                           (filter-greenzones ((select-method s-method) population) greenzones) redzones)
-            new-method (fn [] (new-individual genome-size child-success))
-            fast-method (fn [population] ((mutation-method m-method fast-rate)
-                         (make-child
-                           (rand-nth
-                             (concat (take 20 (sort-by :energy > population))))
-                           child-success)))
+            filtered-pop (vec (filter-redzones
+                           (filter-greenzones
+                             ((select-method s-method) population)
+                             greenzones)
+                           redzones))
+            new-method (fn []
+                         (new-individual genome-size child-success))
+            fast-method (fn [f-pop]
+                          ((mutation-method m-method fast-rate)
+                           (make-child
+                             (rand-nth f-pop)
+                             child-success)))
             slow-method (fn [f-pop]
                           ((mutation-method m-method slow-rate)
-                         (make-child
-                           (rand-nth
-                             (flatten
-                               (mapv
-                                 #(repeat
-                                    (Math/round
-                                      (double
-                                        (Math/log (+ Math/E (max 0 (* 2 (:energy %)))))))
-                                    %)
-                                 f-pop)))
-                           child-success)))
+                           (make-child
+                             (rand-nth
+                               (flatten
+                                 (mapv
+                                   #(repeat
+                                      (Math/round
+                                        (double
+                                          (Math/log (+ Math/E (max 0 (* 2 (:energy %)))))))
+                                      %)
+                                   f-pop)))
+                             child-success)))
             cand-child
             (if (empty? filtered-pop)
-              (rand-nth [(fast-method population)
-                         (new-method)])
-              (if (< 20 (count filtered-pop))
-                (rand-nth [(slow-method filtered-pop)
-                           (fast-method population)
-                           new-method]
-                     #_(rand-nth (conj (repeat (int (- 5 (/ (count filtered-pop) 4))) 0) 1)))
+              (new-method)
+              (if (< (count filtered-pop) 20)
+                (rand-nth [(fast-method filtered-pop)
+                           (new-method)
+                           (new-method)])
                 (rand-nth [(slow-method filtered-pop)
                            (slow-method filtered-pop)
-                           (fast-method population)])))]
+                           (new-method)])))]
         (if (or (collided-any-ind? cand-child children)
                 (collided-any-obj? cand-child objects)
                 (collided-any-obj? cand-child food-zones))

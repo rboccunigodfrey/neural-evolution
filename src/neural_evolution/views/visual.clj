@@ -20,7 +20,7 @@
   (let [gen-size 250
         genome-size 32
         objects (flatten example-object-vec)
-        max-food 80
+        max-food 120
         food (vec (for [i (range (int (/ max-food 2)))]
                     (create-rand-food i)))]
     {:population       (gen-population gen-size genome-size objects)
@@ -33,7 +33,7 @@
      :gen-size         gen-size
      :genome-size      genome-size
      :tpg              300
-     :selection-method :pos-energy
+     :selection-method :none
      :mutation-method  :replace
      :pheromones       []
      :food             food
@@ -50,7 +50,10 @@
         motor-output (calc-motor-output ind population objects pheromones food)
         updated-ind (assoc ind
                       :age (inc (:age ind))
-                      :energy (double (- (:energy ind) (+ 0.2 (* (:kill-cooldown ind) 0.05))))
+                      :energy (double (- (:energy ind)
+                                         (+ 0.2
+                                            (* 0.2 (max 0 (- (:energy ind) (:max-energy ind))))
+                                            (* (:kill-cooldown ind) 0.05))))
                       :color [(if (:hunter ind) 255 0)
                               0
                               (if (:gatherer ind) 255 0)]
@@ -89,7 +92,7 @@
                            (mapv #(hash-map :position (:position %) :strength 30 :id (:id %)) (filter #(:pr %) population)))
         :gen-age (inc (:gen-age state))
         :deaths (+ (:deaths state) (count death-ids))
-        :food (if (and (zero? (rand-int 5)) (< (count remaining-food) (:max-food state)))
+        :food (if (and (zero? (rand-int 2)) (< (count remaining-food) (:max-food state)))
                 (conj
                   remaining-food
                   (create-rand-food (if (zero? (count remaining-food)) 0 (inc (:id (last remaining-food))))))
@@ -203,7 +206,10 @@
                "\nHunters: " (count (filter :hunter (:population state)))
                "\nGatherers: " (count (filter :gatherer (:population state))))
           830 20)
-  (q/text "Selected location sensory data" 810 300)
+  (q/text "Selected location sensory data" 830 280)
+  (q/text (str "Position: "
+               (first (:position (:test-ind state))) ", "
+               (second (:position (:test-ind state)))) 830 300)
   (if (:test-ind state) (doseq [sn (map-indexed vector (keys sensory-neuron-functions))]
                           (q/text (str sn ": " (float ((get sensory-neuron-functions (second sn))
                                                 (:test-ind state)
