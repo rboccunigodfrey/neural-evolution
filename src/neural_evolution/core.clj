@@ -33,7 +33,6 @@
 
 (defn -main [view]
   (case view
-    :textual (evolve-agents 500 300 12 100 :right :replace)
     :visual (defonce sketch (animate-agents))))
 
-#_(-main :visual)
+(-main :visual)
