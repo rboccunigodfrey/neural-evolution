@@ -42,4 +42,5 @@
     :central-circle select-central-circle
     :right-circle select-right-circle
     :left-circle select-left-circle
-    :pos-energy select-pos-energy))
+    :pos-energy select-pos-energy
+    :none (fn [population] population)))

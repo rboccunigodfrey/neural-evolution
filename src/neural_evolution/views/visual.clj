@@ -6,6 +6,7 @@
         [neural-evolution.data.individuals]
         [neural-evolution.data.children]
         [neural-evolution.data.objects-zones]
+        [neural-evolution.data.neurons.sensory]
         [neural-evolution.data.neurons.motor]
         [neural-evolution.evolution.selection]
         [neural-evolution.utils.utils]))
@@ -19,9 +20,9 @@
   (let [gen-size 250
         genome-size 32
         objects (flatten example-object-vec)
-        max-food 75
-        food (vec (for [i (range max-food)]
-               (create-rand-food i)))]
+        max-food 80
+        food (vec (for [i (range (int (/ max-food 2)))]
+                    (create-rand-food i)))]
     {:population       (gen-population gen-size genome-size objects)
      :objects          objects
      :redzones         red-zones
@@ -31,13 +32,15 @@
      :prev-survivors   0
      :gen-size         gen-size
      :genome-size      genome-size
-     :tpg              250
+     :tpg              300
      :selection-method :pos-energy
      :mutation-method  :replace
      :pheromones       []
      :food             food
      :max-food         max-food
-     :deaths           0}))
+     :deaths           0
+     :test-ind         nil
+     :mouse-pressed    false}))
 
 (defn update-ind [ind state]
   (let [population (:population state)
@@ -47,15 +50,15 @@
         motor-output (calc-motor-output ind population objects pheromones food)
         updated-ind (assoc ind
                       :age (inc (:age ind))
-                      :energy (double (- (:energy ind) (+ 0.5 (* (:kill-cooldown ind) 0.2))))
+                      :energy (double (- (:energy ind) (+ 0.2 (* (:kill-cooldown ind) 0.05))))
                       :color [(if (:hunter ind) 255 0)
                               0
                               (if (:gatherer ind) 255 0)]
                       :killing-id -1
                       :gathering-id -1
                       :pr false
-                      :kill-cooldown (if (> (:kill-cooldown ind)  0) (dec (:kill-cooldown ind)) 0)
-                      :gather-cooldown (if (> (:gather-cooldown ind)  0) (dec (:gather-cooldown ind)) 0))]
+                      :kill-cooldown (if (> (:kill-cooldown ind) 0) (dec (:kill-cooldown ind)) 0)
+                      :gather-cooldown (if (> (:gather-cooldown ind) 0) (dec (:gather-cooldown ind)) 0))]
     (if (or (>= 0 (:energy updated-ind)) (empty? motor-output))
       updated-ind
       (if (> (second motor-output) 0)
@@ -74,7 +77,11 @@
           death-ids (distinct (filterv #(>= % 0) (mapv :killing-id population)))
           remaining-population (filterv #(not (in? death-ids (:id %))) population)
           eaten-food-ids (distinct (filterv #(>= % 0) (mapv :gathering-id population)))
-          remaining-food (filterv #(not (in? eaten-food-ids (:id %))) (:food state))]
+          remaining-food (filterv
+                           #(> (:energy %) 0)
+                           (mapv
+                             #(if (in? eaten-food-ids (:id %)) (update % :energy - 15) (update % :energy - 0.5))
+                             (:food state)))]
       (assoc state
         :population (map #(update-ind % state) remaining-population)
         :pheromones [] #_(concat
@@ -82,14 +89,22 @@
                            (mapv #(hash-map :position (:position %) :strength 30 :id (:id %)) (filter #(:pr %) population)))
         :gen-age (inc (:gen-age state))
         :deaths (+ (:deaths state) (count death-ids))
-        :food #_remaining-food
-                (if (and (zero? (rand-int 5)) (< (count remaining-food) (:max-food state)))
-                  (conj
-                    remaining-food
-                    (create-rand-food (if (zero? (count remaining-food)) 0 (inc (:id (last remaining-food))))))
-                  remaining-food)
-                  #_(for [i (range (- (:max-food state) (count remaining-food)))]
-                    (create-rand-food (inc (+ (inc i) (:id (last remaining-food))))))))
+        :food (if (and (zero? (rand-int 5)) (< (count remaining-food) (:max-food state)))
+                (conj
+                  remaining-food
+                  (create-rand-food (if (zero? (count remaining-food)) 0 (inc (:id (last remaining-food))))))
+                remaining-food)
+        #_(for [i (range (- (:max-food state) (count remaining-food)))]
+            (create-rand-food (inc (+ (inc i) (:id (last remaining-food))))))
+        :test-ind (if (and (q/mouse-pressed?) (not (:mouse-pressed state)))
+                    (hash-map :id -1
+                              :age (:gen-age state)
+                              :position [(q/mouse-x) (q/mouse-y)]
+                              :energy 100)
+                    (if (:test-ind state)
+                      (assoc (:test-ind state) :age (:gen-age state))
+                      (:test-ind state)))
+        :mouse-pressed (q/mouse-pressed?)))
     (let [new-objects (:objects state) #_(concat example-object-vec (repeatedly 10 create-rand-obj))]
       (assoc state
         :population
@@ -102,8 +117,8 @@
                       (:gen-size state)
                       (:genome-size state))
         :objects new-objects
-        :food (vec (for [i (range (:max-food state))]
-                (create-rand-food i)))
+        :food (vec (for [i (range (/ (:max-food state) 2))]
+                     (create-rand-food i)))
         :gen-age 0
         :deaths 0
         :generation (inc (:generation state))
@@ -122,7 +137,9 @@
     (q/fill (first color)
             (second color)
             (last color))
-    (q/ellipse (first position) (second position) size (* 1.5 size))))
+    (q/stroke 255 255 0
+              (min 255 (* 3 (:energy ind))))
+    (q/ellipse (first position) (second position) size size)))
 
 (defn draw-obj [obj]
   (q/fill 100)
@@ -135,7 +152,7 @@
     (q/ellipse (first position) (second position) size size)))
 
 (defn draw-food [food]
-  (let [size (/ (:energy food) 2)]
+  (let [size (* 2 (Math/log (:energy food)))]
     (q/fill 0 255 0)
     (q/ellipse (:x food) (:y food) size size)))
 
@@ -148,9 +165,10 @@
   (q/rect (:x greenzone) (:y greenzone) (:w greenzone) (:h greenzone)))
 
 (defn draw-state [state]
-  (q/background 255)
+  #_(q/background 86 125 70)
+  (q/background 50)
   (q/no-stroke)
-  (q/fill 225)
+  (q/fill 255)
   (q/rect 800 0 200 600)
   (doseq [i (range 10)]
     (q/fill 100 (- 10 i))
@@ -167,6 +185,12 @@
     (draw-food food))
   (doseq [ind (:population state)]
     (draw-ind ind))
+  (q/no-stroke)
+  (q/fill 255 0 0)
+  (if (:test-ind state) (q/ellipse (first (:position (:test-ind state)))
+                                   (second (:position (:test-ind state)))
+                                   10 10)
+                        nil)
   (q/fill 0)
   (q/text (str "Generation: " (:generation state)
                "\nGen time: " (:gen-age state)
@@ -175,8 +199,19 @@
                "\nMost kills: " (:kill-count (apply max-key :kill-count (:population state)))
                "\nHighest energy: " (int (:energy (apply max-key :energy (:population state))))
                "\nDeaths: " (:deaths state)
-               "\nFood count: " (count (:food state)))
-          830 20))
+               "\nFood count: " (count (:food state))
+               "\nHunters: " (count (filter :hunter (:population state)))
+               "\nGatherers: " (count (filter :gatherer (:population state))))
+          830 20)
+  (q/text "Selected location sensory data" 810 300)
+  (if (:test-ind state) (doseq [sn (map-indexed vector (keys sensory-neuron-functions))]
+                          (q/text (str sn ": " (float ((get sensory-neuron-functions (second sn))
+                                                (:test-ind state)
+                                                (:population state)
+                                                (:objects state)
+                                                (:pheromones state)
+                                                (:food state)))) 830 (+ 320 (* 20 (first sn)))))
+                        nil))
 
 (defn animate-agents []
   (q/sketch

@@ -27,30 +27,41 @@
     (if (= gen-size child-success)
       children
       (let [slow-rate 0.01
-            fast-rate 0.075
+            fast-rate 0.125
             filtered-pop (filter-redzones
                            (filter-greenzones ((select-method s-method) population) greenzones) redzones)
+            new-method (new-individual genome-size child-success)
+            fast-method ((mutation-method m-method fast-rate)
+                         (make-child
+                           (rand-nth
+                             (concat (take 20 (sort-by :energy > population))))
+                           child-success))
+            slow-method ((mutation-method m-method slow-rate)
+                         (make-child
+                           (rand-nth
+                             (flatten
+                               (mapv
+                                 #(repeat
+                                    (Math/round
+                                      (double
+                                        (Math/log (+ Math/E (max 0 (* 2 (:energy %)))))))
+                                    %)
+                                 filtered-pop)))
+                           child-success))
             cand-child
             (if (empty? filtered-pop)
-              ((mutation-method m-method fast-rate)
-               (make-child
-                 (rand-nth (take 10 (sort-by :energy > population)))
-                 child-success))
+              (rand-nth [fast-method
+                         new-method])
               (if (< 20 (count filtered-pop))
-                (nth [((mutation-method m-method fast-rate)
-                            (make-child
-                              (rand-nth (take 20 (sort-by :energy > population)))
-                              child-success))
-                           ((mutation-method m-method slow-rate)
-                           (make-child
-                             (rand-nth filtered-pop)
-                             child-success))]
-                     (rand-nth (conj (repeat (int (- 5 (/ (count filtered-pop) 4))) 0) 1)))
-                ((mutation-method m-method slow-rate)
-                 (make-child
-                   (rand-nth filtered-pop)
-                   child-success))))]
+                (rand-nth [slow-method
+                           fast-method
+                           new-method]
+                     #_(rand-nth (conj (repeat (int (- 5 (/ (count filtered-pop) 4))) 0) 1)))
+                (rand-nth [slow-method
+                           slow-method
+                           fast-method])))]
         (if (or (collided-any-ind? cand-child children)
-                (collided-any-obj? cand-child objects))
+                (collided-any-obj? cand-child objects)
+                (collided-any-obj? cand-child food-zones))
           (recur children child-success)
           (recur (conj children cand-child) (inc child-success)))))))

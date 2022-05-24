@@ -7,7 +7,7 @@
 
 (defn new-individual [genome-size id]
   (let [genome (map str (repeatedly genome-size #(rand-hex 64)))
-        start-energy 50]
+        start-energy (+ 49.5 (rand))]
     {:id              id
      :genome          genome
      :neural-map      (gen-synapse-vec genome)
@@ -19,6 +19,7 @@
      :direction       -1
      :energy          start-energy
      :start-energy    start-energy
+     :max-energy      (* 2 start-energy)
      :killing-id      -1
      :kill-count      0
      :hunter          false
@@ -35,6 +36,7 @@
       population
       (let [cand-ind (new-individual genome-size ind-success)]
         (if (or (collided-any-ind? cand-ind population)
-                (collided-any-obj? cand-ind objects))
+                (collided-any-obj? cand-ind objects)
+                (collided-any-obj? cand-ind food-zones))
           (recur population ind-success)
           (recur (conj population cand-ind) (inc ind-success)))))))
