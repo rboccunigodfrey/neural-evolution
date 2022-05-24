@@ -30,13 +30,14 @@
             fast-rate 0.125
             filtered-pop (filter-redzones
                            (filter-greenzones ((select-method s-method) population) greenzones) redzones)
-            new-method (new-individual genome-size child-success)
-            fast-method ((mutation-method m-method fast-rate)
+            new-method (fn [] (new-individual genome-size child-success))
+            fast-method (fn [population] ((mutation-method m-method fast-rate)
                          (make-child
                            (rand-nth
                              (concat (take 20 (sort-by :energy > population))))
-                           child-success))
-            slow-method ((mutation-method m-method slow-rate)
+                           child-success)))
+            slow-method (fn [f-pop]
+                          ((mutation-method m-method slow-rate)
                          (make-child
                            (rand-nth
                              (flatten
@@ -46,20 +47,20 @@
                                       (double
                                         (Math/log (+ Math/E (max 0 (* 2 (:energy %)))))))
                                     %)
-                                 filtered-pop)))
-                           child-success))
+                                 f-pop)))
+                           child-success)))
             cand-child
             (if (empty? filtered-pop)
-              (rand-nth [fast-method
-                         new-method])
+              (rand-nth [(fast-method population)
+                         (new-method)])
               (if (< 20 (count filtered-pop))
-                (rand-nth [slow-method
-                           fast-method
+                (rand-nth [(slow-method filtered-pop)
+                           (fast-method population)
                            new-method]
                      #_(rand-nth (conj (repeat (int (- 5 (/ (count filtered-pop) 4))) 0) 1)))
-                (rand-nth [slow-method
-                           slow-method
-                           fast-method])))]
+                (rand-nth [(slow-method filtered-pop)
+                           (slow-method filtered-pop)
+                           (fast-method population)])))]
         (if (or (collided-any-ind? cand-child children)
                 (collided-any-obj? cand-child objects)
                 (collided-any-obj? cand-child food-zones))
